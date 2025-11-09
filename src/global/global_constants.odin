@@ -1,0 +1,4 @@
+package global
+
+SCREEN_WIDTH  :: 1400
+SCREEN_HEIGHT :: 900

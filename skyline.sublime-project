@@ -1,0 +1,35 @@
+{
+	"folders":
+	[
+		{
+			"path": ".",
+		},
+		{
+			"path": "D:\\Odin\\core",
+		},
+		{
+			"path": "D:\\Odin\\vendor\\raylib"
+		},
+	],
+	"build_systems":
+	[
+        {
+            "name": "Game",
+            "cmd": "odin run ./src -file -vet -strict-style -out=./bin/skyline_console.exe",
+            //"cmd": "odin run ./src -file -out=./bin/skyline.exe -subsystem:windows", <-- compile without console!
+            "file_regex": "^(.+)\\(([0-9]+):([0-9]+)\\) (.+)$",
+            "working_dir": "${project_path}" 
+        },
+	],
+	"settings":
+	{
+		"auto_complete": false,
+		"LSP":
+		{
+			"odin":
+			{
+				"enabled": true,
+			},
+		},
+	},
+}
