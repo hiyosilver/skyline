@@ -8,6 +8,7 @@ RawInput :: struct {
     mouse_buttons: [rl.MouseButton]bit_set[InputFlags],
     mouse_wheel_movement: f32,
     keys: #sparse[rl.KeyboardKey]bit_set[InputFlags],
+    captured: bool,
 }
 
 InputFlags :: enum u8 {

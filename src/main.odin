@@ -6,6 +6,7 @@ import "core:math"
 import "core:math/linalg"
 import "core:os"
 import "core:path/filepath"
+import "crew"
 import "buildings"
 import "global"
 import "input"
@@ -30,14 +31,19 @@ GameState :: struct {
     zoom_delay: f32,
 
     //Simulation
+    paused: bool,
     tick_speed: f32,
     tick_timer: f32,
+    period_length: int,
+    current_tick: int,
 
     //Game data
     money: f64,
+    period_income: f64,
     money_change: ChangeOnTick,
     illegitimate_money: f64,
     illegitimate_money_change: ChangeOnTick,
+    base_tax_rate: f64,
 }
 
 CameraZoom :: enum {
@@ -46,30 +52,41 @@ CameraZoom :: enum {
     Far,
 }
 
+JobEntry :: struct {
+    job: ^jobs.Job,
+    display: ui.JobDisplay,
+}
+
+CrewEntry :: struct {
+    crew_member: ^crew.CrewMember,
+    display: ui.CrewMemberDisplay,
+}
+
 exe_path: string
 exe_dir: string
 
 game_state: GameState
 
-tick_bar: ui.LoadingBar
+money_label_component: ^ui.Component
+illegitimate_money_label_component: ^ui.Component
+tick_bar_component: ^ui.Component
 
-building_test: buildings.Building
+buildings_list: [dynamic]buildings.Building 
 
 jobs_list: [dynamic]jobs.Job
-job_displays: [dynamic]ui.JobDisplay
+job_entries: [dynamic]JobEntry
+
+crew_members_list: [dynamic]crew.CrewMember
+crew_member_entries: [dynamic]CrewEntry
+
+ui_root: ^ui.Component
 
 main :: proc() {
     game_state.tick_speed = 1.0
+    game_state.period_length = 30
+    game_state.current_tick = 1
     game_state.money = 20.0
-
-    tick_bar = ui.LoadingBar {
-        position = {global.SCREEN_WIDTH * 0.5 - 250.0 * 0.5, 32.0},
-        size = {250.0, 16.0},
-        max = game_state.tick_speed,
-        current = 0.0,
-        color = rl.YELLOW,
-        background_color = rl.DARKGRAY,
-    }
+    game_state.base_tax_rate = 0.15
 
     exe_path = os.args[0]
     exe_dir = filepath.dir(exe_path)
@@ -98,56 +115,62 @@ main :: proc() {
     pending_buttons := make(map[rl.MouseButton]bit_set[input.InputFlags])
     pending_keys    := make(map[rl.KeyboardKey]bit_set[input.InputFlags])
 
-    building_test = buildings.Building {
+    building_crown_plaza := buildings.Building {
         position = {400.0, 800.0},
-        texture_id = .Skyscraper1,
+        texture_id = .SkyscraperCrownPlaza,
         texture_offset = {96.0, 1088.0},
-        image_data = rl.LoadImageFromTexture(textures.building_textures[.Skyscraper1]),
+        image_data = rl.LoadImageFromTexture(textures.building_textures[.SkyscraperCrownPlaza].albedo),
         name = "Crown Plaza Tower",
     }
+    append(&buildings_list, building_crown_plaza)
+
+    building_atlas_hotel := buildings.Building {
+        position = {600.0, 860.0},
+        texture_id = .SkyscraperAtlasHotel,
+        texture_offset = {77.0, 480.0},
+        image_data = rl.LoadImageFromTexture(textures.building_textures[.SkyscraperAtlasHotel].albedo),
+        name = "Atlas Hotel",
+    }
+    append(&buildings_list, building_atlas_hotel)
 
     jobs_list = make([dynamic]jobs.Job)
-    job_displays = make([dynamic]ui.JobDisplay)
+    job_entries = make([dynamic]JobEntry)
 
     jobA := jobs.Job {
         name = "Job A",
         level = 2,
-        is_active = false,
         ticks_needed = 6,
         income = 2.5,
         illegitimate_income = 1.5,
         details = jobs.StandardJob{},
     }
     append(&jobs_list, jobA)
-    append(&job_displays, ui.create_job_display(&jobA, {16.0, 360.0}, {320.0, 120.0}))
+    append(&job_entries, JobEntry{&jobA, ui.make_job_display(&jobA)})
 
     jobB := jobs.Job {
         name = "Job B",
         level = 1,
-        is_active = false,
         ticks_needed = 5,
         income = 3.0,
         details = jobs.StandardJob{},
     }
     append(&jobs_list, jobB)
-    append(&job_displays, ui.create_job_display(&jobB, {16.0, 492.0}, {320.0, 120.0}))
+    append(&job_entries, JobEntry{&jobB, ui.make_job_display(&jobB)})
 
 
     jobC := jobs.Job {
         name = "Job C",
         level = 1,
-        is_active = false,
         ticks_needed = 3,
         income = 1.5,
         details = jobs.StandardJob{},
     }
     append(&jobs_list, jobC)
-    append(&job_displays, ui.create_job_display(&jobC, {16.0, 628.0}, {320.0, 120.0}))
+    append(&job_entries, JobEntry{&jobC, ui.make_job_display(&jobC)})
 
     jobD : jobs.Job = jobs.Job {
         name = "Risky Job",
         level = 5,
-        is_active = false,
         ticks_needed = 10,
         illegitimate_income = 145.0,
         details = jobs.BuyinJob{
@@ -157,7 +180,67 @@ main :: proc() {
         },
     }
     append(&jobs_list, jobD)
-    append(&job_displays, ui.create_job_display(&jobD, {16.0, 764.0}, {320.0, 120.0}))
+    append(&job_entries, JobEntry{&jobD, ui.make_job_display(&jobD)})
+
+    crew_members_list = make([dynamic]crew.CrewMember)
+    crew_member_entries = make([dynamic]CrewEntry)
+
+    crew_member := crew.generate_crew_member()
+    append(&crew_members_list, crew_member)
+    append(&crew_member_entries, CrewEntry{&crew_member, ui.make_crew_member_display(&crew_member)})
+
+    job_panel := ui.make_anchor(.BottomLeft,
+        ui.make_panel(rl.Color{255.0, 255.0, 255.0, 0.0}, {200.0, 0.0},
+            ui.make_margin(16, 16, 16, 16, 
+                ui.make_box(.Vertical, .SpaceBetween, .Fill, 16,
+                    job_entries[0].display.root,
+                    job_entries[1].display.root,
+                    job_entries[2].display.root,
+                    job_entries[3].display.root,
+                ),
+            ),
+        ),
+    )
+
+    crew_panel := ui.make_anchor(.BottomRight,
+        ui.make_panel(rl.Color{255.0, 255.0, 255.0, 0.0}, {200.0, 0.0},
+            ui.make_margin(16, 16, 16, 16, 
+                ui.make_box(.Vertical, .SpaceBetween, .Fill, 16,
+                    crew_member_entries[0].display.root,
+                ),
+            ),
+        ),
+    )
+
+    tick_bar_component = ui.make_loading_bar(0, game_state.tick_speed, rl.ORANGE, rl.DARKGRAY, {250.0, 16.0})
+
+    top_panel := ui.make_anchor(.Top,
+        ui.make_margin(32, 0, 0, 0,
+            tick_bar_component,
+        ),
+    )
+
+    money_label_component = ui.make_label("", global.font_large, 28, rl.BLACK, .Left)
+    illegitimate_money_label_component = ui.make_label("", global.font_large_italic, 28, rl.DARKGRAY, .Left)
+
+    money_panel := ui.make_anchor(.TopLeft,
+        ui.make_margin(16, 16, 16, 16,
+            ui.make_box(.Vertical, .Start, .Fill, 4,
+                money_label_component,
+                illegitimate_money_label_component,
+            ),
+        ),
+    )
+
+    ui_root = ui.make_stack(
+        money_panel,
+        job_panel,
+        crew_panel,
+        top_panel,
+    )
+
+    screen_w := f32(rl.GetScreenWidth())
+    screen_h := f32(rl.GetScreenHeight())
 
     for !rl.WindowShouldClose() {
         delta := rl.GetFrameTime()
@@ -165,7 +248,7 @@ main :: proc() {
 
         frame_input = input.get_input()
 
-        update_ui_input(&frame_input)
+        process_ui_interactions(&frame_input)
 
         for btn in rl.MouseButton {
             flags := frame_input.mouse_buttons[btn]
@@ -211,41 +294,106 @@ main :: proc() {
             updates += 1
         }
 
-        update_ui(&frame_input)
+        sync_ui_visuals()
+
+        ui.update_components_recursive(ui_root, {0, 0, screen_w, screen_h})
 
         alpha := accumulator / FIXED_DELTA
 
         draw(alpha)
+
+        free_all(context.temp_allocator)
     }
 }
 
 @(fini)
 finish :: proc() {
-    rl.UnloadImage(building_test.image_data)
+    for &building in buildings_list {
+        rl.UnloadImage(building.image_data)
+    }
+    delete(buildings_list)
     delete(jobs_list)
-    delete(job_displays)
+    delete(job_entries)
+    delete(crew_members_list)
+    delete(crew_member_entries)
+
+    ui.destroy_components_recursive(ui_root)
 }
 
-update_ui_input :: proc(input_data: ^input.RawInput) {
-    for &display in job_displays {
-        ui.update_job_display_input(&display, input_data)
+process_ui_interactions :: proc(input_data: ^input.RawInput) {
+    input_data.captured = ui.handle_input_recursive(ui_root, input_data)
+
+    handle_job_display_interactions()
+
+    for &entry in crew_member_entries {
+        ui.update_crew_member_display(&entry.display, entry.crew_member, game_state.tick_timer, game_state.tick_speed)
+    }
+
+    if bar, ok := &tick_bar_component.variant.(ui.LoadingBarAlt); ok {
+        bar.current = game_state.tick_timer
+        bar.max = game_state.tick_speed 
+    }
+}
+
+handle_job_display_interactions :: proc() {
+    for &entry, i in job_entries {
+        #partial switch &details in entry.job.details {
+        case jobs.BuyinJob:
+            has_sufficient_funds := game_state.money >= details.buyin_price && game_state.illegitimate_money >= details.illegitimate_buyin_price
+            ui.button_set_disabled(entry.display.start_button, !has_sufficient_funds && !entry.job.is_ready && !entry.job.is_ready)
+        }
+
+        if ui.button_was_clicked(entry.display.start_button) {
+            toggle_job_state(&entry, i)
+            break
+        }
+    }
+}
+
+toggle_job_state :: proc(entry: ^JobEntry, index: int) {
+    job_active := jobs.toggle_state(entry.job)
+    if job_active {
+        #partial switch &d in entry.job.details {
+        case jobs.BuyinJob:
+            game_state.money -= d.buyin_price
+            game_state.illegitimate_money -= d.illegitimate_buyin_price
+        }
+
+        for other_entry, j in job_entries {
+            if index == j do continue
+
+            jobs.deactivate(other_entry.job)
+        }
     }
 }
 
 update :: proc(input_data: ^input.RawInput) {
-    game_state.tick_timer += FIXED_DELTA
-    if game_state.tick_timer >= game_state.tick_speed {
-        game_state.tick_timer -= game_state.tick_speed
-        tick()
+    if input.is_key_released_this_frame(.SPACE, input_data) {
+        game_state.paused = ! game_state.paused
     }
 
-    is_hovered := buildings.is_building_hovered(&building_test, input_data, &game_state.camera)
-    building_test.hovered = is_hovered
-    if input.is_mouse_button_released_this_frame(.LEFT, input_data) {
-        building_test.selected = is_hovered
+    if !game_state.paused {
+        game_state.tick_timer += FIXED_DELTA
+        if game_state.tick_timer >= game_state.tick_speed {
+            game_state.tick_timer -= game_state.tick_speed
+            tick()
+        }
     }
 
-    //world_mouse_pos := rl.GetScreenToWorld2D(input.mouse_position, game_state.camera)
+    for &building in buildings_list {
+        is_hovered := buildings.is_building_hovered(&building, input_data, &game_state.camera)
+        if is_hovered && !input_data.captured {
+            building.hovered = true
+            if input.is_mouse_button_released_this_frame(.LEFT, input_data) {
+                building.selected = true
+            }
+        } else {
+            building.hovered = false
+            if input.is_mouse_button_released_this_frame(.LEFT, input_data) {
+                building.selected = false
+            }
+        }
+    }
 
     if input.is_mouse_button_held_down(.MIDDLE, input_data) {
         pan_direction := input_data.mouse_delta / game_state.camera.zoom
@@ -285,67 +433,71 @@ update :: proc(input_data: ^input.RawInput) {
     }
 }
 
-update_ui :: proc(input_data: ^input.RawInput) {
-    outer: for &display, i in job_displays {
-        #partial switch &d in display.job.details {
-        case jobs.BuyinJob:
-            if game_state.money >= d.buyin_price && game_state.illegitimate_money >= d.illegitimate_buyin_price {
-                if display.start_button.state == .Disabled {
-                    display.start_button.state = .Idle
-                }
-            } else if !display.job.is_ready && !display.job.is_ready {
-                display.start_button.state = .Disabled
-            }
-        }
-
-        ui.update_job_display(&display, game_state.tick_timer)
-        if display.start_button.state == .Released {
-            job_active := jobs.toggle_state(display.job)
-            if !job_active {
-                ui.reset_job_display(&display)
-            } else {
-                #partial switch &d in display.job.details {
-                case jobs.BuyinJob:
-                    game_state.money -= d.buyin_price
-                    game_state.illegitimate_money -= d.illegitimate_buyin_price
-                }
-
-                for &other_display, j in job_displays {
-                    if i == j {
-                        continue
-                    }
-                    jobs.deactivate(other_display.job)
-                    ui.reset_job_display(&other_display)
-                }
-            }
-            break outer
-        }
+sync_ui_visuals :: proc() {
+    for &entry in job_entries {
+        ui.update_job_display(&entry.display, entry.job, game_state.tick_timer, game_state.tick_speed)
     }
 
-    tick_bar.current = game_state.tick_timer
+    ui.label_set_text(money_label_component, fmt.tprintf("%s $", global.format_float_thousands(game_state.money, 2, ',', '.')))
+    ui.label_set_text(illegitimate_money_label_component, fmt.tprintf("%s ₴", global.format_float_thousands(game_state.illegitimate_money, 2, ',', '.')))
 }
 
 tick :: proc() {
     prev_money := game_state.money
-    prev_illegitimate_monez := game_state.illegitimate_money
+    prev_illegitimate_money := game_state.illegitimate_money
 
-    for &display in job_displays {
-        job_result := jobs.tick(display.job)
-        if display.job.is_ready {
-            display.job.is_active = true
+    for &entry in job_entries {
+        job_result := jobs.tick(entry.job)
+        if entry.job.is_ready {
+            entry.job.is_active = true
         }
         if job_result == .Finished {
-            game_state.money += display.job.income
-            game_state.illegitimate_money += display.job.illegitimate_income
-            ui.reset_job_display(&display)
-            #partial switch &d in display.job.details {
+            game_state.money += entry.job.income
+            game_state.period_income += entry.job.income
+            game_state.illegitimate_money += entry.job.illegitimate_income
+            #partial switch &d in entry.job.details {
             case jobs.BuyinJob:
-                jobs.deactivate(display.job)
+                jobs.deactivate(entry.job)
             }
         } else if job_result == .Failed {
-            jobs.deactivate(display.job)
-            ui.reset_job_display(&display)
+            jobs.deactivate(entry.job)
         }
+    }
+
+    for &entry in crew_member_entries {
+        job_result := jobs.tick(&entry.crew_member.default_job)
+        if entry.crew_member.default_job.is_ready {
+            entry.crew_member.default_job.is_active = true
+        }
+        if job_result == .Finished {
+            game_state.money += entry.crew_member.default_job.income
+            game_state.period_income += entry.crew_member.default_job.income
+            game_state.illegitimate_money += entry.crew_member.default_job.illegitimate_income
+        } else if job_result == .Failed {
+            jobs.deactivate(&entry.crew_member.default_job)
+        }
+    }
+
+    game_state.current_tick += 1
+    if game_state.current_tick > game_state.period_length {
+        game_state.current_tick = 1
+
+        salaries, salaries_illegitimate: f64
+        for &crew_member in crew_members_list {
+            salaries += crew_member.base_salary
+            salaries_illegitimate += crew_member.base_salary_illegitimate
+        }
+
+        game_state.money -= salaries
+        game_state.illegitimate_money -= salaries_illegitimate
+
+        tax := game_state.period_income * game_state.base_tax_rate
+
+        fmt.printfln("Tax: %f", tax)
+
+        game_state.money -= tax
+
+        game_state.period_income = 0.0
     }
 
     switch  {
@@ -358,11 +510,11 @@ tick :: proc() {
     }
 
     switch  {
-    case game_state.illegitimate_money == prev_illegitimate_monez:
+    case game_state.illegitimate_money == prev_illegitimate_money:
         game_state.illegitimate_money_change = .Maintained
-    case game_state.illegitimate_money < prev_illegitimate_monez:
+    case game_state.illegitimate_money < prev_illegitimate_money:
         game_state.illegitimate_money_change = .Decreased
-    case game_state.illegitimate_money > prev_illegitimate_monez:
+    case game_state.illegitimate_money > prev_illegitimate_money:
         game_state.illegitimate_money_change = .Increased
     }
 }
@@ -375,11 +527,13 @@ draw :: proc(alpha: f32) {
 
     rl.BeginMode2D(game_state.camera)
 
-    //rl.DrawTextureV(textures.building_textures[.Skyscraper1], {300.0, 100.0}, rl.WHITE)
-    buildings.draw_building(&building_test)
+    for &building in buildings_list {
+        buildings.draw_building(&building)
+    }
 
     rl.EndMode2D()
 
+    /*
     money_string := fmt.ctprintf("Money: %s $", global.format_float_thousands(game_state.money, 2, ',', '.'))
     money_string_width := rl.MeasureTextEx(global.font_large, money_string, 28.0, 2.0).x
     illegitimate_money_string := fmt.ctprintf("Illegitimate money: %s ₴", global.format_float_thousands(game_state.illegitimate_money, 2, ',', '.'))
@@ -403,14 +557,23 @@ draw :: proc(alpha: f32) {
     case .Decreased:
         rl.DrawTextPro(global.font_large_italic, "↘", {24.0 + illegitimate_money_string_width, 48.0}, {0.0, 0.0}, 0.0, 28.0, 2.0, rl.RED)
     }
+    */
 
     //rl.DrawTextPro(global.font_italic, fmt.ctprintf("Scroll delay: %f", game_state.zoom_delay), {16.0, 80.0}, {0.0, 0.0}, 0.0, 24.0, 2.0, rl.DARKGRAY)
 
-    ui.draw_loading_bar(&tick_bar)
+    circle_radius : f32 = 10.0
+    period_display_width := game_state.period_length * (int(circle_radius) * 2) + (game_state.period_length - 1) * 2
+    origin := rl.Vector2{global.SCREEN_WIDTH * 0.5 - f32(period_display_width) * 0.5 + circle_radius, 16}
 
-    for &display in job_displays {
-        ui.draw_job_display(&display)
+    for i in 0..<game_state.period_length {
+        base_color := i == game_state.period_length - 1 ? rl.RED : rl.ORANGE
+        rl.DrawCircleV(origin, circle_radius, rl.DARKGRAY)
+        rl.DrawRing(origin, circle_radius - 4.0, circle_radius - 2.0, 0.0, 360.0, 16, base_color)
+        if (i + 1) <= game_state.current_tick {
+            rl.DrawCircleGradient(i32(origin.x), i32(origin.y), circle_radius - 4.0, rl.RAYWHITE, base_color)
+        }
+        origin += {circle_radius * 2 + 2, 0}
     }
 
-    free_all(context.temp_allocator)
+    if ui_root != nil do ui.draw_components_recursive(ui_root)
 }
