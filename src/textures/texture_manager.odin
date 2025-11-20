@@ -44,4 +44,5 @@ unload_textures :: proc() {
 		rl.UnloadTexture(tex.albedo)
 		rl.UnloadTexture(tex.normal)
 	}
+	delete(building_textures)
 }

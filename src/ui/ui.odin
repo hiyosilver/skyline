@@ -250,7 +250,7 @@ button_set_disabled :: proc(component: ^Component, disabled: bool) {
 }
 
 Label :: struct {
-    text:       string,
+    text:       cstring,
     font: 		rl.Font,
     font_size:  f32,
     color:      rl.Color,
@@ -260,7 +260,7 @@ Label :: struct {
 make_label :: proc(text: string, font: rl.Font, font_size: f32 = 20.0, color: rl.Color = rl.BLACK, alignment: AnchorType = .Center) -> ^Component {
     c := new(Component)
     c.variant = Label{
-        text      = strings.clone(text),
+        text      = strings.clone_to_cstring(text),
         font 	  = font,
         font_size = font_size,
         color     = color,
@@ -274,7 +274,7 @@ label_set_text :: proc(component: ^Component, text: string) {
 
     if label, ok := &component.variant.(Label); ok {
         delete(label.text)
-        label.text = strings.clone(text)
+        label.text = strings.clone_to_cstring(text)
         
         component.desired_size = {0, 0} 
     }
@@ -383,7 +383,7 @@ make_job_display :: proc(job: ^jobs.Job) -> JobDisplay {
 }
 
 update_job_display :: proc(widget: ^JobDisplay, job: ^jobs.Job, tick_timer: f32, tick_speed: f32) {
-    label_set_text(widget.level_label, fmt.tprintf("%s%s", strings.repeat("◆", job.level), strings.repeat("◇", 10 - job.level)))
+    label_set_text(widget.level_label, fmt.tprintf("%s%s", strings.repeat("◆", job.level, context.temp_allocator), strings.repeat("◇", 10 - job.level, context.temp_allocator)))
     label_set_text(widget.name_label, job.name)
     if job.is_active {
     	label_set_text(widget.name_label, fmt.tprintf("%s ▶", job.name))
@@ -631,7 +631,7 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
         desired_size.y = child_desired_size.y + (v.padding * 2)
         desired_size = {max(component.min_size.x, desired_size.x), max(component.min_size.y, desired_size.y)}
 	case Label:
-    	desired_size = rl.MeasureTextEx(v.font, cstring(raw_data(v.text)), v.font_size, 2.0)
+    	desired_size = rl.MeasureTextEx(v.font, v.text, v.font_size, 2.0)
 	case LoadingBarAlt:
 		desired_size = component.min_size
 	}
@@ -979,7 +979,7 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 
 	    draw_components_recursive(v.child, debug)
 	case Label:
-		text_dims := rl.MeasureTextEx(v.font, cstring(raw_data(v.text)), v.font_size, 2.0)
+		text_dims := rl.MeasureTextEx(v.font, v.text, v.font_size, 2.0)
         
         pos := component.position
 
@@ -1001,7 +1001,7 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 
         rl.DrawTextEx(
             v.font, 
-            cstring(raw_data(v.text)), 
+            v.text, 
             pos,
             v.font_size, 
             2.0, 

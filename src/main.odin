@@ -4,6 +4,7 @@ import rl "vendor:raylib"
 import "core:fmt"
 import "core:math"
 import "core:math/linalg"
+//import "core:mem"
 import "core:os"
 import "core:path/filepath"
 import "crew"
@@ -82,6 +83,33 @@ crew_member_entries: [dynamic]CrewEntry
 ui_root: ^ui.Component
 
 main :: proc() {
+    /*
+    track: mem.Tracking_Allocator
+    mem.tracking_allocator_init(&track, context.allocator)
+    defer mem.tracking_allocator_destroy(&track)
+    context.allocator = mem.tracking_allocator(&track)
+
+    defer {
+        if len(track.allocation_map) > 0 {
+            fmt.eprintf("=== %v allocations not freed: ===\n", len(track.allocation_map))
+            for _, entry in track.allocation_map {
+                fmt.eprintf("- %v bytes @ %v\n", entry.size, entry.location)
+
+                if entry.size < 500 {
+                    str := string(mem.slice_ptr(cast(^u8)entry.memory, entry.size))
+                    fmt.eprintf("  Content: %q\n", str)
+                }
+            }
+        }
+        if len(track.bad_free_array) > 0 {
+            fmt.eprintf("=== %v incorrect frees: ===\n", len(track.bad_free_array))
+            for entry in track.bad_free_array {
+                fmt.eprintf("- %p @ %v\n", entry.memory, entry.location)
+            }
+        }
+    }
+    */
+
     game_state.tick_speed = 1.0
     game_state.period_length = 30
     game_state.current_tick = 1
@@ -90,7 +118,9 @@ main :: proc() {
 
     exe_path = os.args[0]
     exe_dir = filepath.dir(exe_path)
+    defer delete(exe_dir)
     asset_dir := filepath.join([]string{exe_dir, "../assets"})
+    defer delete(asset_dir)
 
     rl.SetExitKey(rl.KeyboardKey.KEY_NULL)
     rl.SetConfigFlags({ .MSAA_4X_HINT, /*.VSYNC_HINT*/ }) //MSAA causes artifacts when used with raygui for some reason!
@@ -304,10 +334,11 @@ main :: proc() {
 
         free_all(context.temp_allocator)
     }
+
+    cleanup()
 }
 
-@(fini)
-finish :: proc() {
+cleanup :: proc() {
     for &building in buildings_list {
         rl.UnloadImage(building.image_data)
     }
@@ -492,8 +523,6 @@ tick :: proc() {
         game_state.illegitimate_money -= salaries_illegitimate
 
         tax := game_state.period_income * game_state.base_tax_rate
-
-        fmt.printfln("Tax: %f", tax)
 
         game_state.money -= tax
 
