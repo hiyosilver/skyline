@@ -130,6 +130,17 @@ box_add_child :: proc(box: ^Component, child: ^Component) {
     }
 }
 
+box_remove_child :: proc(box: ^Component, child_to_remove: ^Component) {
+    if b, ok := &box.variant.(BoxContainer); ok {
+        for child_ptr, i in b.children {
+            if child_ptr == child_to_remove {
+                ordered_remove(&b.children, i) 
+                return
+            }
+        }
+    }
+}
+
 MarginContainer :: struct {
 	child: ^Component,
 	margin_top, margin_right, margin_bottom, margin_left: int,

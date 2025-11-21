@@ -44,7 +44,10 @@ GameState :: struct {
     money_change: ChangeOnTick,
     illegitimate_money: f64,
     illegitimate_money_change: ChangeOnTick,
+
     base_tax_rate: f64,
+    tax_debt: f64,
+    tax_debt_interest_rate: f64,
 }
 
 CameraZoom :: enum {
@@ -54,12 +57,12 @@ CameraZoom :: enum {
 }
 
 JobEntry :: struct {
-    job: ^jobs.Job,
+    job: jobs.Job,
     display: ui.JobDisplay,
 }
 
 CrewEntry :: struct {
-    crew_member: ^crew.CrewMember,
+    crew_member: crew.CrewMember,
     display: ui.CrewMemberDisplay,
 }
 
@@ -74,11 +77,11 @@ tick_bar_component: ^ui.Component
 
 buildings_list: [dynamic]buildings.Building 
 
-jobs_list: [dynamic]jobs.Job
 job_entries: [dynamic]JobEntry
+jobs_box: ^ui.Component
 
-crew_members_list: [dynamic]crew.CrewMember
 crew_member_entries: [dynamic]CrewEntry
+crew_members_box: ^ui.Component
 
 ui_root: ^ui.Component
 
@@ -113,8 +116,9 @@ main :: proc() {
     game_state.tick_speed = 1.0
     game_state.period_length = 30
     game_state.current_tick = 1
-    game_state.money = 20.0
+    game_state.money = 0.0
     game_state.base_tax_rate = 0.15
+    game_state.tax_debt_interest_rate = 0.005
 
     exe_path = os.args[0]
     exe_dir = filepath.dir(exe_path)
@@ -123,7 +127,7 @@ main :: proc() {
     defer delete(asset_dir)
 
     rl.SetExitKey(rl.KeyboardKey.KEY_NULL)
-    rl.SetConfigFlags({ .MSAA_4X_HINT, /*.VSYNC_HINT*/ }) //MSAA causes artifacts when used with raygui for some reason!
+    rl.SetConfigFlags({ .MSAA_4X_HINT, /*.VSYNC_HINT*/ })
 
     rl.InitWindow(global.SCREEN_WIDTH, global.SCREEN_HEIGHT, "Skyline")
     defer rl.CloseWindow()
@@ -163,7 +167,6 @@ main :: proc() {
     }
     append(&buildings_list, building_atlas_hotel)
 
-    jobs_list = make([dynamic]jobs.Job)
     job_entries = make([dynamic]JobEntry)
 
     jobA := jobs.Job {
@@ -174,8 +177,7 @@ main :: proc() {
         illegitimate_income = 1.5,
         details = jobs.StandardJob{},
     }
-    append(&jobs_list, jobA)
-    append(&job_entries, JobEntry{&jobA, ui.make_job_display(&jobA)})
+    append(&job_entries, JobEntry{jobA, ui.make_job_display(&jobA)})
 
     jobB := jobs.Job {
         name = "Job B",
@@ -184,8 +186,7 @@ main :: proc() {
         income = 3.0,
         details = jobs.StandardJob{},
     }
-    append(&jobs_list, jobB)
-    append(&job_entries, JobEntry{&jobB, ui.make_job_display(&jobB)})
+    append(&job_entries, JobEntry{jobB, ui.make_job_display(&jobB)})
 
 
     jobC := jobs.Job {
@@ -195,8 +196,7 @@ main :: proc() {
         income = 1.5,
         details = jobs.StandardJob{},
     }
-    append(&jobs_list, jobC)
-    append(&job_entries, JobEntry{&jobC, ui.make_job_display(&jobC)})
+    append(&job_entries, JobEntry{jobC, ui.make_job_display(&jobC)})
 
     jobD : jobs.Job = jobs.Job {
         name = "Risky Job",
@@ -209,35 +209,36 @@ main :: proc() {
             failure_chance = 0.02,
         },
     }
-    append(&jobs_list, jobD)
-    append(&job_entries, JobEntry{&jobD, ui.make_job_display(&jobD)})
+    append(&job_entries, JobEntry{jobD, ui.make_job_display(&jobD)})
 
-    crew_members_list = make([dynamic]crew.CrewMember)
     crew_member_entries = make([dynamic]CrewEntry)
 
     crew_member := crew.generate_crew_member()
-    append(&crew_members_list, crew_member)
-    append(&crew_member_entries, CrewEntry{&crew_member, ui.make_crew_member_display(&crew_member)})
+    append(&crew_member_entries, CrewEntry{crew_member, ui.make_crew_member_display(&crew_member)})
+
+    jobs_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 16,
+        job_entries[0].display.root,
+        job_entries[1].display.root,
+        job_entries[2].display.root,
+        job_entries[3].display.root,
+    )
 
     job_panel := ui.make_anchor(.BottomLeft,
         ui.make_panel(rl.Color{255.0, 255.0, 255.0, 0.0}, {200.0, 0.0},
             ui.make_margin(16, 16, 16, 16, 
-                ui.make_box(.Vertical, .SpaceBetween, .Fill, 16,
-                    job_entries[0].display.root,
-                    job_entries[1].display.root,
-                    job_entries[2].display.root,
-                    job_entries[3].display.root,
-                ),
+                jobs_box,
             ),
         ),
+    )
+
+    crew_members_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 16,
+        crew_member_entries[0].display.root,
     )
 
     crew_panel := ui.make_anchor(.BottomRight,
         ui.make_panel(rl.Color{255.0, 255.0, 255.0, 0.0}, {200.0, 0.0},
             ui.make_margin(16, 16, 16, 16, 
-                ui.make_box(.Vertical, .SpaceBetween, .Fill, 16,
-                    crew_member_entries[0].display.root,
-                ),
+                crew_members_box,
             ),
         ),
     )
@@ -343,9 +344,7 @@ cleanup :: proc() {
         rl.UnloadImage(building.image_data)
     }
     delete(buildings_list)
-    delete(jobs_list)
     delete(job_entries)
-    delete(crew_members_list)
     delete(crew_member_entries)
 
     ui.destroy_components_recursive(ui_root)
@@ -357,7 +356,7 @@ process_ui_interactions :: proc(input_data: ^input.RawInput) {
     handle_job_display_interactions()
 
     for &entry in crew_member_entries {
-        ui.update_crew_member_display(&entry.display, entry.crew_member, game_state.tick_timer, game_state.tick_speed)
+        ui.update_crew_member_display(&entry.display, &entry.crew_member, game_state.tick_timer, game_state.tick_speed)
     }
 
     if bar, ok := &tick_bar_component.variant.(ui.LoadingBarAlt); ok {
@@ -382,7 +381,7 @@ handle_job_display_interactions :: proc() {
 }
 
 toggle_job_state :: proc(entry: ^JobEntry, index: int) {
-    job_active := jobs.toggle_state(entry.job)
+    job_active := jobs.toggle_state(&entry.job)
     if job_active {
         #partial switch &d in entry.job.details {
         case jobs.BuyinJob:
@@ -390,10 +389,10 @@ toggle_job_state :: proc(entry: ^JobEntry, index: int) {
             game_state.illegitimate_money -= d.illegitimate_buyin_price
         }
 
-        for other_entry, j in job_entries {
+        for &other_entry, j in job_entries {
             if index == j do continue
 
-            jobs.deactivate(other_entry.job)
+            jobs.deactivate(&other_entry.job)
         }
     }
 }
@@ -466,10 +465,14 @@ update :: proc(input_data: ^input.RawInput) {
 
 sync_ui_visuals :: proc() {
     for &entry in job_entries {
-        ui.update_job_display(&entry.display, entry.job, game_state.tick_timer, game_state.tick_speed)
+        ui.update_job_display(&entry.display, &entry.job, game_state.tick_timer, game_state.tick_speed)
     }
 
-    ui.label_set_text(money_label_component, fmt.tprintf("%s $", global.format_float_thousands(game_state.money, 2, ',', '.')))
+    if game_state.tax_debt > 0.0 {
+        ui.label_set_text(money_label_component, fmt.tprintf("%s $ (-%s)", global.format_float_thousands(game_state.money, 2, ',', '.'), global.format_float_thousands(game_state.tax_debt, 2, ',', '.')))
+    } else {
+        ui.label_set_text(money_label_component, fmt.tprintf("%s $", global.format_float_thousands(game_state.money, 2, ',', '.')))
+    }
     ui.label_set_text(illegitimate_money_label_component, fmt.tprintf("%s ₴", global.format_float_thousands(game_state.illegitimate_money, 2, ',', '.')))
 }
 
@@ -477,8 +480,8 @@ tick :: proc() {
     prev_money := game_state.money
     prev_illegitimate_money := game_state.illegitimate_money
 
-    for &entry in job_entries {
-        job_result := jobs.tick(entry.job)
+    for &entry, i in job_entries {
+        job_result := jobs.tick(&entry.job)
         if entry.job.is_ready {
             entry.job.is_active = true
         }
@@ -488,10 +491,12 @@ tick :: proc() {
             game_state.illegitimate_money += entry.job.illegitimate_income
             #partial switch &d in entry.job.details {
             case jobs.BuyinJob:
-                jobs.deactivate(entry.job)
+                jobs.deactivate(&entry.job)
+                remove_job(i)
             }
         } else if job_result == .Failed {
-            jobs.deactivate(entry.job)
+            jobs.deactivate(&entry.job)
+            remove_job(i)
         }
     }
 
@@ -513,20 +518,7 @@ tick :: proc() {
     if game_state.current_tick > game_state.period_length {
         game_state.current_tick = 1
 
-        salaries, salaries_illegitimate: f64
-        for &crew_member in crew_members_list {
-            salaries += crew_member.base_salary
-            salaries_illegitimate += crew_member.base_salary_illegitimate
-        }
-
-        game_state.money -= salaries
-        game_state.illegitimate_money -= salaries_illegitimate
-
-        tax := game_state.period_income * game_state.base_tax_rate
-
-        game_state.money -= tax
-
-        game_state.period_income = 0.0
+        calculate_period_end()
     }
 
     switch  {
@@ -546,6 +538,57 @@ tick :: proc() {
     case game_state.illegitimate_money > prev_illegitimate_money:
         game_state.illegitimate_money_change = .Increased
     }
+}
+
+calculate_period_end :: proc() {
+    salaries, salaries_illegitimate: f64
+    #reverse for &entry, i in crew_member_entries {
+        if game_state.money < entry.crew_member.base_salary {
+            game_state.money = 0.0
+            remove_crew_member(i)
+        } else {
+            game_state.money -= entry.crew_member.base_salary
+        }
+        
+        if game_state.illegitimate_money < entry.crew_member.base_salary_illegitimate {
+            game_state.illegitimate_money = 0.0
+            remove_crew_member(i)
+            continue
+        }
+        game_state.illegitimate_money -= entry.crew_member.base_salary_illegitimate
+    }
+
+    game_state.money -= salaries
+    game_state.illegitimate_money -= salaries_illegitimate
+
+    game_state.tax_debt *= (1.0 + game_state.tax_debt_interest_rate)
+
+    tax := game_state.period_income * game_state.base_tax_rate
+
+    if tax > 0.0 {
+        if game_state.money >= tax {
+            game_state.money -= tax
+        } else {
+            game_state.tax_debt += tax - game_state.money
+            game_state.money = 0
+        }
+    }
+
+    game_state.period_income = 0.0
+}
+
+remove_crew_member :: proc(entry_index: int) {
+    entry := crew_member_entries[entry_index]
+    ui.box_remove_child(crew_members_box, entry.display.root)
+    ui.destroy_components_recursive(entry.display.root)
+    ordered_remove(&crew_member_entries, entry_index)
+}
+
+remove_job :: proc(entry_index: int) {
+    entry := job_entries[entry_index]
+    ui.box_remove_child(jobs_box, entry.display.root)
+    ui.destroy_components_recursive(entry.display.root)
+    ordered_remove(&job_entries, entry_index)
 }
 
 draw :: proc(alpha: f32) {
