@@ -33,17 +33,15 @@ BuyinJob :: struct {
 }
 
 tick :: proc(job: ^Job) -> JobResult {
+	if !job.is_active do return .Inactive
+
 	switch &d in job.details {
 	case StandardJob:
 	case BuyinJob:
 		if job.ticks_current < job.ticks_needed - 1 && rand.float32() <= d.failure_chance {
 			return .Failed
 		}
-	case:
-		return .Inactive
 	}
-
-	if !job.is_active do return .Inactive
 
 	job.ticks_current += 1
 	if job.ticks_current >= job.ticks_needed {
