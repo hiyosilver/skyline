@@ -41,9 +41,10 @@ Company :: struct {
 	price_history: [dynamic]f64,
 	shares_outstanding: int,
 	float_percentage: f64,
+	volatility: f64,
 }
 
-create_company :: proc(id: CompanyID, name, ticker_symbol, description: string, category: CompanySector, current_price: f64, shares_outstanding: int, float_percentage: f64) -> Company {
+create_company :: proc(id: CompanyID, name, ticker_symbol, description: string, category: CompanySector, current_price: f64, shares_outstanding: int, float_percentage: f64, volatility: f64) -> Company {
 	return Company{
 		id = id,
 		name = name,
@@ -56,6 +57,7 @@ create_company :: proc(id: CompanyID, name, ticker_symbol, description: string, 
 		price_history = make([dynamic]f64),
 		shares_outstanding = shares_outstanding,
 		float_percentage = float_percentage,
+		volatility = volatility,
 	}
 }
 
@@ -67,54 +69,50 @@ create_stock_market :: proc() -> StockMarket {
 	companies := make(map[CompanyID]Company)
 
 	//Communication Services
-	companies[101] = create_company(101, "Echo Media", "ECHO", "News and broadcasting giant", .CommunicationServices, 45.0, 1_000_000_000, 0.95)
-	companies[102] = create_company(102, "Chatterbox", "CHAT", "Social media platform", .CommunicationServices, 67.0, 75_000_000, 0.4)
+	companies[101] = create_company(101, "Echo Media", "ECHO", "News and broadcasting giant", .CommunicationServices, 45.0, 1_000_000_000, 0.95, 0.05)
+	companies[102] = create_company(102, "Chatterbox", "CHAT", "Social media platform", .CommunicationServices, 67.0, 75_000_000, 0.4, 0.075)
 
 	//Consumer Discretionary
-	companies[201] = create_company(201, "Apex Automotive", "APEX", "Luxury car manufacturer", .ConsumerDiscretionary, 172.0, 500_000_000, 0.55)
-	companies[202] = create_company(202, "Sapphire Resorts", "SAPH", "Luxury hotel chain", .ConsumerDiscretionary, 413.0, 60_000_000, 0.65)
+	companies[201] = create_company(201, "Apex Automotive", "APEX", "Luxury car manufacturer", .ConsumerDiscretionary, 172.0, 500_000_000, 0.55, 0.2)
+	companies[202] = create_company(202, "Sapphire Resorts", "SAPH", "Luxury hotel chain", .ConsumerDiscretionary, 413.0, 60_000_000, 0.65, 0.35)
 
 	//Consumer Staples
-	companies[301] = create_company(301, "Family Mart", "FAM", "Big-box grocery retailer", .ConsumerStaples, 23.0, 10_000_000_000, 0.9)
+	companies[301] = create_company(301, "Family Mart", "FAM", "Big-box grocery retailer", .ConsumerStaples, 23.0, 10_000_000_000, 0.9, 0.05)
 
 	//Energy
-	companies[401] = create_company(401, "PetroMax", "PMAX", "Oil and gas", .Energy, 261.0, 1_150_000_000, 0.98)
+	companies[401] = create_company(401, "PetroMax", "PMAX", "Oil and gas", .Energy, 261.0, 1_150_000_000, 0.98, 0.45)
 
 	//Financials
-	companies[501] = create_company(501, "Sterling Trust", "STER", "Wealth management services", .Financials, 259.0, 30_000_000, 0.85)
-	companies[502] = create_company(502, "Pinnacle Capital", "STER", "Investment banking", .Financials, 318.0, 25_000_000, 0.8)
+	companies[501] = create_company(501, "Sterling Trust", "STER", "Wealth management services", .Financials, 259.0, 30_000_000, 0.85, 0.15)
+	companies[502] = create_company(502, "Pinnacle Capital", "STER", "Investment banking", .Financials, 318.0, 25_000_000, 0.8, 0.22)
 
 	//Healthcare
-	companies[601] = create_company(601, "AstraCare", "AST", "Nursing homes and elderly care", .Healthcare, 89.0, 67_000_000, 0.9)
+	companies[601] = create_company(601, "AstraCare", "AST", "Nursing homes and elderly care", .Healthcare, 89.0, 67_000_000, 0.9, 0.15)
 
 	//Industrial
-	companies[701] = create_company(701, "Condor Industries", "CDI", "Aerospace", .Industrial, 339.0, 177_000_000, 0.8)
+	companies[701] = create_company(701, "Condor Industries", "CDI", "Aerospace", .Industrial, 339.0, 177_000_000, 0.8, 0.125)
 
 	//Information Technology
-	companies[801] = create_company(801, "DataSphere", "DATA", "Cloud storage and big data", .InformationTechnology, 125.0, 1_000_000_000, 0.6)
+	companies[801] = create_company(801, "DataSphere", "DATA", "Cloud storage and big data", .InformationTechnology, 125.0, 1_000_000_000, 0.6, 0.8)
 
 	//Materials
-	companies[901] = create_company(901, "Strateon Mining", "STRA", "Cloud storage and big data", .Materials, 17.0, 70_000_000, 0.45)
+	companies[901] = create_company(901, "Strateon Mining", "STRA", "Cloud storage and big data", .Materials, 17.0, 70_000_000, 0.45, 0.3)
 
 	//Real Estate
-	companies[1001] = create_company(1001, "Horizon Properties", "HRZN", "Residential apartment complexes", .RealEstate, 104.0, 52_000_000, 0.85)
-	companies[1002] = create_company(1002, "MetroLiving", "MTRO", "Low income housing", .RealEstate, 43.0, 18_000_000, 0.78)
-	companies[1003] = create_company(1003, "Foundation", "FND", "Mortgage investment trust", .RealEstate, 413.0, 48_000_000, 0.9)
+	companies[1001] = create_company(1001, "Horizon Properties", "HRZN", "Residential apartment complexes", .RealEstate, 104.0, 52_000_000, 0.85, 0.1)
+	companies[1002] = create_company(1002, "MetroLiving", "MTRO", "Low income housing", .RealEstate, 43.0, 18_000_000, 0.78, 0.075)
+	companies[1003] = create_company(1003, "Foundation", "FND", "Mortgage investment trust", .RealEstate, 413.0, 48_000_000, 0.9, 0.12)
 
 	//Utilities
-	companies[1101] = create_company(1101, "VitalWay", "VIT", "Natural gas distribution", .Utilities, 76.0, 500_000_000, 0.99)
+	companies[1101] = create_company(1101, "VitalWay", "VIT", "Natural gas distribution", .Utilities, 76.0, 500_000_000, 0.99, 0.01)
 
 	return StockMarket{companies}
 }
 
 update_stock_market :: proc(market: ^StockMarket) {
 	for _, &company in market.companies {
-		random := rand.float32()
-		if random < 0.5 {
-			company.current_price *= 0.98
-		} else {
-			company.current_price *= 1.02
-		}
+		random_spread := (rand.float64() - 0.5) * 2.0
+		company.current_price += random_spread * company.volatility
 	}
 }
 
