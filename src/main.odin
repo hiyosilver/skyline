@@ -12,6 +12,7 @@ import "buildings"
 import "global"
 import "input"
 import "jobs"
+import "stocks"
 import "textures"
 import "ui"
 
@@ -51,6 +52,9 @@ GameState :: struct {
 
     tick_stats_buffer: [dynamic]TickStatistics,
     tick_stats_buffer_size: int,
+
+    stock_market: stocks.StockMarket,
+    stock_portfolio: stocks.StockPortfolio,
 }
 
 TickStatistics :: struct {
@@ -101,6 +105,8 @@ graph: ^ui.Component
 money_radio_button: ^ui.Component
 illegitimate_money_radio_button: ^ui.Component
 
+stock_window: ui.StockWindow
+
 ui_root: ^ui.Component
 
 main :: proc() {
@@ -134,11 +140,13 @@ main :: proc() {
     game_state.tick_speed = 1.0
     game_state.period_length = 30
     game_state.current_tick = 1
-    game_state.money = 0.0
+    game_state.money = 100.0
     game_state.base_tax_rate = 0.15
     game_state.tax_debt_interest_rate = 0.005
     game_state.tick_stats_buffer = make([dynamic]TickStatistics)
     game_state.tick_stats_buffer_size = 30
+    game_state.stock_market = stocks.create_stock_market()
+    game_state.stock_portfolio = stocks.create_stock_portfolio(&game_state.stock_market)
 
     exe_path = os.args[0]
     exe_dir = filepath.dir(exe_path)
@@ -317,12 +325,16 @@ main :: proc() {
         ),
     )
 
+    stock_window = ui.make_stock_window(&game_state.stock_market)
+    stock_window.root.state = .Inactive
+
     ui_root = ui.make_stack(
         money_panel,
         graph_panel,
         job_panel,
         crew_panel,
         top_panel,
+        stock_window.root,
     )
 
     screen_w := f32(rl.GetScreenWidth())
@@ -403,11 +415,15 @@ cleanup :: proc() {
     delete(crew_member_entries)
     delete(game_state.tick_stats_buffer)
 
+    stocks.close_stock_market(&game_state.stock_market)
+
     ui.destroy_components_recursive(ui_root)
 }
 
 process_ui_interactions :: proc(input_data: ^input.RawInput) {
     input_data.captured = ui.handle_input_recursive(ui_root, input_data)
+
+    handle_stock_window_interactions()
 
     handle_job_display_interactions()
 
@@ -422,6 +438,25 @@ process_ui_interactions :: proc(input_data: ^input.RawInput) {
     if bar, ok := &tick_bar_component.variant.(ui.LoadingBar); ok {
         bar.current = game_state.tick_timer
         bar.max = game_state.tick_speed 
+    }
+}
+
+handle_stock_window_interactions :: proc() {
+    if box, ok := &stock_window.stock_list_box.variant.(ui.BoxContainer); ok {
+        for child, i in box.children {
+            if ui.button_was_clicked(child) {
+                selected_id := stock_window.company_list[i]
+                stock_window.selected_id = selected_id
+            }
+        }
+    }
+
+    if ui.button_was_clicked(stock_window.buy_button) {
+        stocks.execute_buy_order(&game_state.stock_market, &game_state.stock_portfolio, &game_state.money, stock_window.selected_id, 1)
+    }
+
+    if ui.button_was_clicked(stock_window.sell_button) {
+        stocks.execute_sell_order(&game_state.stock_market, &game_state.stock_portfolio, &game_state.money, &game_state.period_income, stock_window.selected_id, 1)
     }
 }
 
@@ -459,7 +494,15 @@ toggle_job_state :: proc(entry: ^JobEntry, index: int) {
 
 update :: proc(input_data: ^input.RawInput) {
     if input.is_key_released_this_frame(.SPACE, input_data) {
-        game_state.paused = ! game_state.paused
+        game_state.paused = !game_state.paused
+    }
+
+    if input.is_key_released_this_frame(.S, input_data) {
+        if stock_window.root.state == .Inactive {
+            stock_window.root.state = .Active
+        } else {
+            stock_window.root.state = .Inactive
+        }
     }
 
     if !game_state.paused {
@@ -494,7 +537,7 @@ update :: proc(input_data: ^input.RawInput) {
         game_state.camera.target -= pan_direction * angle
     }
 
-    if input_data.mouse_wheel_movement > 0.0 && math.abs(game_state.zoom_delay) < math.F32_EPSILON && game_state.camera_zoom != .Close {
+    if !input_data.captured && input_data.mouse_wheel_movement > 0.0 && math.abs(game_state.zoom_delay) < math.F32_EPSILON && game_state.camera_zoom != .Close {
         game_state.zoom_delay = 0.25
         #partial switch game_state.camera_zoom {
         case .Default:
@@ -504,7 +547,7 @@ update :: proc(input_data: ^input.RawInput) {
             game_state.camera_zoom = .Default
             game_state.camera.zoom = 1.0
         }
-    } else if input_data.mouse_wheel_movement < 0.0 && math.abs(game_state.zoom_delay) < math.F32_EPSILON && game_state.camera_zoom != .Far {
+    } else if !input_data.captured && input_data.mouse_wheel_movement < 0.0 && math.abs(game_state.zoom_delay) < math.F32_EPSILON && game_state.camera_zoom != .Far {
         game_state.zoom_delay = 0.25
         #partial switch game_state.camera_zoom {
         case .Default:
@@ -524,16 +567,18 @@ update :: proc(input_data: ^input.RawInput) {
 }
 
 sync_ui_visuals :: proc() {
+    ui.update_stock_window(&stock_window, &game_state.stock_market, &game_state.stock_portfolio)
+
     for &entry in job_entries {
         ui.update_job_display(&entry.display, &entry.job, game_state.tick_timer, game_state.tick_speed)
     }
 
     if game_state.tax_debt > 0.0 {
-        ui.label_set_text(money_label_component, fmt.tprintf("%s $ (-%s)", global.format_float_thousands(game_state.money, 2, ',', '.'), global.format_float_thousands(game_state.tax_debt, 2, ',', '.')))
+        ui.label_set_text(money_label_component, fmt.tprintf("%s $ (-%s $)", global.format_float_thousands(game_state.money, 2), global.format_float_thousands(game_state.tax_debt, 2)))
     } else {
-        ui.label_set_text(money_label_component, fmt.tprintf("%s $", global.format_float_thousands(game_state.money, 2, ',', '.')))
+        ui.label_set_text(money_label_component, fmt.tprintf("%s $", global.format_float_thousands(game_state.money, 2)))
     }
-    ui.label_set_text(illegitimate_money_label_component, fmt.tprintf("%s ₴", global.format_float_thousands(game_state.illegitimate_money, 2, ',', '.')))
+    ui.label_set_text(illegitimate_money_label_component, fmt.tprintf("%s ₴", global.format_float_thousands(game_state.illegitimate_money, 2)))
 }
 
 tick :: proc() {
@@ -619,6 +664,8 @@ tick :: proc() {
     }
 
     update_graph()
+
+    stocks.update_stock_market(&game_state.stock_market)
 }
 
 update_graph :: proc() {
@@ -680,36 +727,51 @@ update_graph :: proc() {
 }
 
 calculate_period_end :: proc(tick_stats: ^TickStatistics) {
+    //Calculate and pay salaries
     salaries, salaries_illegitimate: f64
     #reverse for &entry, i in crew_member_entries {
-        if game_state.money < entry.crew_member.base_salary {
+        if game_state.money >= entry.crew_member.base_salary {
+            game_state.money -= entry.crew_member.base_salary
+            salaries += entry.crew_member.base_salary
+        } else {
             game_state.money = 0.0
             remove_crew_member(i)
-        } else {
-            game_state.money -= entry.crew_member.base_salary
         }
         
-        if game_state.illegitimate_money < entry.crew_member.base_salary_illegitimate {
+        if game_state.illegitimate_money >= entry.crew_member.base_salary_illegitimate {
+            game_state.illegitimate_money -= entry.crew_member.base_salary_illegitimate
+            salaries_illegitimate += entry.crew_member.base_salary_illegitimate
+        } else {
             game_state.illegitimate_money = 0.0
             remove_crew_member(i)
-            continue
         }
-        game_state.illegitimate_money -= entry.crew_member.base_salary_illegitimate
     }
 
     tick_stats.salaries = salaries
     tick_stats.illegitimate_salaries = salaries_illegitimate
 
-    game_state.money -= salaries
-    game_state.illegitimate_money -= salaries_illegitimate
+    //Calculate tax debt interest
+    tax_debt_interest := game_state.tax_debt * game_state.tax_debt_interest_rate
 
-    game_state.tax_debt *= (1.0 + game_state.tax_debt_interest_rate)
+    //Accumulate tax debt
+    game_state.tax_debt += tax_debt_interest
 
+    //Try to pay tax debt
+    if game_state.tax_debt > 0.0 {
+        if game_state.money >= game_state.tax_debt {
+            game_state.money -= game_state.tax_debt
+            game_state.tax_debt = 0.0
+        } else {
+            game_state.tax_debt -= game_state.money
+            game_state.money = 0.0
+        }
+    }
+
+    //Calculate tax
     tax := game_state.period_income * game_state.base_tax_rate
-
     tick_stats.taxes = tax
-    tick_stats.tax_debt = game_state.tax_debt
 
+    //Try to pay tax
     if tax > 0.0 {
         if game_state.money >= tax {
             game_state.money -= tax
@@ -719,6 +781,7 @@ calculate_period_end :: proc(tick_stats: ^TickStatistics) {
         }
     }
 
+    tick_stats.tax_debt = game_state.tax_debt
     game_state.period_income = 0.0
 }
 
@@ -751,9 +814,9 @@ draw :: proc(alpha: f32) {
     rl.EndMode2D()
 
     /*
-    money_string := fmt.ctprintf("Money: %s $", global.format_float_thousands(game_state.money, 2, ',', '.'))
+    money_string := fmt.ctprintf("Money: %s $", global.format_float_thousands(game_state.money, 2))
     money_string_width := rl.MeasureTextEx(global.font_large, money_string, 28.0, 2.0).x
-    illegitimate_money_string := fmt.ctprintf("Illegitimate money: %s ₴", global.format_float_thousands(game_state.illegitimate_money, 2, ',', '.'))
+    illegitimate_money_string := fmt.ctprintf("Illegitimate money: %s ₴", global.format_float_thousands(game_state.illegitimate_money, 2))
     illegitimate_money_string_width := rl.MeasureTextEx(global.font_large_italic, illegitimate_money_string, 28.0, 2.0).x
 
     rl.DrawTextPro(global.font_large, money_string, {16.0, 16.0}, {0.0, 0.0}, 0.0, 28.0, 2.0, rl.DARKGRAY)

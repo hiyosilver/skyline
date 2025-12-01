@@ -3,20 +3,25 @@ package ui
 import rl "vendor:raylib"
 import "core:fmt"
 import "core:math"
+import "core:slice"
 import "core:strings"
 import "../crew"
 import "../global"
 import "../input"
 import "../jobs"
+import "../stocks"
 import "../textures"
-
-Base :: struct {
-	position, size: rl.Vector2,
-}
 
 Component :: struct {
 	position, size, min_size, desired_size: rl.Vector2,
 	variant: ComponentVariant,
+	state: ComponentState,
+}
+
+ComponentState :: enum {
+	Active, //Default
+	Hidden, //Invisible, but still takes up space
+	Inactive, //Invisible and no area for purposes of space calculation
 }
 
 ComponentVariant :: union {
@@ -24,6 +29,7 @@ ComponentVariant :: union {
 	AnchorContainer,
 	BoxContainer,
 	MarginContainer,
+	ScrollContainer,
 	Panel,
 	Pill,
 	SimpleButton,
@@ -164,6 +170,24 @@ make_margin :: proc(margin_top, margin_right, margin_bottom, margin_left: int, c
 	return c
 }
 
+ScrollContainer :: struct {
+	child: ^Component,
+	scroll_y:        f32,        // Tracks how far the view is scrolled down
+    content_height:  f32,        // Calculated max height of the content
+    viewport_height: f32,        // The height the parent allocated to this container
+    scrollable_range: f32,       // content_height - viewport_height
+}
+
+make_scroll_container :: proc(min_size: rl.Vector2, child: ^Component = nil) -> ^Component {
+    c := new(Component)
+    c.min_size = min_size
+
+    c.variant = ScrollContainer{
+        child = child,
+    }
+    return c
+}
+
 Panel :: struct {
 	child: ^Component,
 	color: rl.Color,
@@ -221,10 +245,9 @@ SimpleButton :: struct {
 	click_type: SimpleButtonClickType,
 	color_default, color_hovered, color_pressed: rl.Color,
 	padding: f32,
-	on_click: proc(),
 }
 
-make_simple_button :: proc(click_type: SimpleButtonClickType, color: rl.Color, min_size: rl.Vector2, on_click: proc(), child: ^Component = nil) -> ^Component {
+make_simple_button :: proc(click_type: SimpleButtonClickType, color: rl.Color, min_size: rl.Vector2, child: ^Component = nil) -> ^Component {
 	c := new(Component)
 
 	c.min_size = min_size
@@ -236,7 +259,6 @@ make_simple_button :: proc(click_type: SimpleButtonClickType, color: rl.Color, m
 		color_hovered = rl.ColorBrightness(color, 0.2),
 		color_pressed = rl.ColorBrightness(color, -0.2),
 		padding = 4.0,
-		on_click = on_click,
 		child    = child,
 	}
 
@@ -389,6 +411,14 @@ label_set_text :: proc(component: ^Component, text: string) {
 	}
 }
 
+label_set_color :: proc(component: ^Component, color: rl.Color) {
+	if component == nil do return
+
+	if label, ok := &component.variant.(Label); ok {
+		label.color = color
+	}
+}
+
 LoadingBar :: struct {
 	max, current:     f32,
 	color:            rl.Color,
@@ -485,22 +515,25 @@ make_job_display :: proc(job: ^jobs.Job) -> JobDisplay {
 
 	base_color, button_color: rl.Color
 
+	widget.buyin_price_label = make_label("", global.font_small_italic, 18.0, rl.BLACK, .Center)
+	buyin_pill := make_pill(rl.RAYWHITE, {}, widget.buyin_price_label)
+
 	if _, ok := job.details.(jobs.BuyinJob); ok {
 		base_color = rl.Color{192, 92, 92, 255}
 		button_color = rl.RED
 	} else {
 		base_color = rl.GRAY
 		button_color = rl.DARKGRAY
+		buyin_pill.state = .Inactive
 	}
 
 	widget.button_label = make_label("", global.font, 24.0, rl.RAYWHITE)
-	widget.start_button = make_simple_button(.OnRelease, button_color, {80.0, 0.0}, proc(){}, widget.button_label)
+	widget.start_button = make_simple_button(.OnRelease, button_color, {80.0, 0.0}, widget.button_label)
 
 	widget.level_label = make_label("", global.font_small, 18.0, rl.RAYWHITE, .Left)
 	widget.name_label = make_label("", global.font, 24.0, rl.RAYWHITE, .Left)
 	widget.income_label = make_label("", global.font_small_italic, 18.0, rl.RAYWHITE, .Left)
 	widget.ticks_label = make_label("", global.font_small_italic, 18.0, rl.RAYWHITE, .Left)
-	widget.buyin_price_label = make_label("", global.font_small_italic, 18.0, rl.BLACK, .Center)
 
 	total_width := f32(320.0 - 32.0)
 	widget.progress_box = make_box(.Horizontal, .Start, .Fill, 1)
@@ -531,9 +564,7 @@ make_job_display :: proc(job: ^jobs.Job) -> JobDisplay {
 					),
 					make_box(.Vertical, .Start, .End, 4,
 						widget.start_button,
-						make_pill(rl.RAYWHITE, {},
-							widget.buyin_price_label,
-						),
+						buyin_pill,
 					),
 				),
 				widget.ticks_label,
@@ -560,24 +591,24 @@ update_job_display :: proc(widget: ^JobDisplay, job: ^jobs.Job, tick_timer: f32,
 
 	if job.income > 0.0 {
 		if job.illegitimate_income > 0.0 {
-			label_set_text(widget.income_label, fmt.tprintf("%s $ + %s ₴", global.format_float_thousands(job.income, 2, ',', '.'), global.format_float_thousands(job.illegitimate_income, 2, ',', '.')))
+			label_set_text(widget.income_label, fmt.tprintf("%s $ + %s ₴", global.format_float_thousands(job.income, 2), global.format_float_thousands(job.illegitimate_income, 2)))
 		} else {
-			label_set_text(widget.income_label, fmt.tprintf("%s $", global.format_float_thousands(job.income, 2, ',', '.')))
+			label_set_text(widget.income_label, fmt.tprintf("%s $", global.format_float_thousands(job.income, 2)))
 		}
 	} else {
-		label_set_text(widget.income_label, fmt.tprintf("%s ₴", global.format_float_thousands(job.illegitimate_income, 2, ',', '.')))
+		label_set_text(widget.income_label, fmt.tprintf("%s ₴", global.format_float_thousands(job.illegitimate_income, 2)))
 	}
 
 	if details, ok := job.details.(jobs.BuyinJob); ok {
-		label_set_text(widget.ticks_label, fmt.tprintf("%d ticks (Failure chance: %s%% / tick)", job.ticks_needed, global.format_float_thousands(f64(details.failure_chance * 100.0), 2, ',', '.')))
+		label_set_text(widget.ticks_label, fmt.tprintf("%d ticks (Failure chance: %s%% / tick)", job.ticks_needed, global.format_float_thousands(f64(details.failure_chance * 100.0), 2)))
 		if details.buyin_price > 0.0 {
 			if details.illegitimate_buyin_price > 0.0 {
-				label_set_text(widget.buyin_price_label, fmt.tprintf("%s $ + %s ₴", global.format_float_thousands(details.buyin_price, 2, ',', '.'), global.format_float_thousands(details.illegitimate_buyin_price, 2, ',', '.')))
+				label_set_text(widget.buyin_price_label, fmt.tprintf("%s $ + %s ₴", global.format_float_thousands(details.buyin_price, 2), global.format_float_thousands(details.illegitimate_buyin_price, 2)))
 			} else {
-				label_set_text(widget.buyin_price_label, fmt.tprintf("%s $", global.format_float_thousands(details.buyin_price, 2, ',', '.')))
+				label_set_text(widget.buyin_price_label, fmt.tprintf("%s $", global.format_float_thousands(details.buyin_price, 2)))
 			}
 		} else {
-			label_set_text(widget.buyin_price_label, fmt.tprintf("%s ₴", global.format_float_thousands(details.illegitimate_buyin_price, 2, ',', '.')))
+			label_set_text(widget.buyin_price_label, fmt.tprintf("%s ₴", global.format_float_thousands(details.illegitimate_buyin_price, 2)))
 		}
 	} else {
 		label_set_text(widget.ticks_label, fmt.tprintf("%d ticks", job.ticks_needed))
@@ -683,12 +714,12 @@ update_crew_member_display :: proc(widget: ^CrewMemberDisplay, cm: ^crew.CrewMem
 
 	if cm.base_salary > 0.0 {
 		if cm.base_salary_illegitimate > 0.0 {
-			label_set_text(widget.salary_label, fmt.tprintf("%s $ + %s ₴", global.format_float_thousands(cm.base_salary, 2, ',', '.'), global.format_float_thousands(cm.base_salary_illegitimate, 2, ',', '.')))
+			label_set_text(widget.salary_label, fmt.tprintf("%s $ + %s ₴", global.format_float_thousands(cm.base_salary, 2), global.format_float_thousands(cm.base_salary_illegitimate, 2)))
 		} else {
-			label_set_text(widget.salary_label, fmt.tprintf("%s $", global.format_float_thousands(cm.base_salary, 2, ',', '.')))
+			label_set_text(widget.salary_label, fmt.tprintf("%s $", global.format_float_thousands(cm.base_salary, 2)))
 		}
 	} else {
-		label_set_text(widget.salary_label, fmt.tprintf("%s ₴", global.format_float_thousands(cm.base_salary_illegitimate, 2, ',', '.')))
+		label_set_text(widget.salary_label, fmt.tprintf("%s ₴", global.format_float_thousands(cm.base_salary_illegitimate, 2)))
 	}
 
 	job_name := cm.default_job.name
@@ -703,17 +734,17 @@ update_crew_member_display :: proc(widget: ^CrewMemberDisplay, cm: ^crew.CrewMem
 	job := &cm.default_job
 	if job.income > 0.0 {
 		if job.illegitimate_income > 0.0 {
-			label_set_text(widget.income_label, fmt.tprintf("%s $ + %s ₴", global.format_float_thousands(job.income, 2, ',', '.'), global.format_float_thousands(job.illegitimate_income, 2, ',', '.')))
+			label_set_text(widget.income_label, fmt.tprintf("%s $ + %s ₴", global.format_float_thousands(job.income, 2), global.format_float_thousands(job.illegitimate_income, 2)))
 		} else {
-			label_set_text(widget.income_label, fmt.tprintf("%s $", global.format_float_thousands(job.income, 2, ',', '.')))
+			label_set_text(widget.income_label, fmt.tprintf("%s $", global.format_float_thousands(job.income, 2)))
 		}
 	} else {
-		label_set_text(widget.income_label, fmt.tprintf("%s ₴", global.format_float_thousands(job.illegitimate_income, 2, ',', '.')))
+		label_set_text(widget.income_label, fmt.tprintf("%s ₴", global.format_float_thousands(job.illegitimate_income, 2)))
 	}
 
 	#partial switch details in job.details {
 	case jobs.BuyinJob:
-		 label_set_text(widget.ticks_label, fmt.tprintf("%d ticks (Fail: %s%%)", job.ticks_needed, global.format_float_thousands(f64(details.failure_chance * 100.0), 1, ',', '.')))
+		 label_set_text(widget.ticks_label, fmt.tprintf("%d ticks (Fail: %s%%)", job.ticks_needed, global.format_float_thousands(f64(details.failure_chance * 100.0), 1)))
 	case:
 		 label_set_text(widget.ticks_label, fmt.tprintf("%d ticks", job.ticks_needed))
 	}
@@ -737,6 +768,152 @@ update_crew_member_display :: proc(widget: ^CrewMemberDisplay, cm: ^crew.CrewMem
 	}
 }
 
+StockWindow :: struct {
+	root: ^Component,
+
+	selected_id: stocks.CompanyID,
+	company_list: [dynamic]stocks.CompanyID,
+	stock_price_labels: [dynamic]^Component,
+
+	stock_list_box: ^Component,
+
+	detail_root:    ^Component,
+    name_label:     ^Component,
+    price_label:    ^Component,
+    available_label:    ^Component,
+    owned_label:    ^Component,
+    profit_loss_label:    ^Component,
+    buy_button:    ^Component,
+    sell_button:    ^Component,
+}
+
+make_stock_window :: proc(market: ^stocks.StockMarket) -> StockWindow {
+	widget: StockWindow = {}
+
+	widget.company_list = make([dynamic]stocks.CompanyID)
+	for id, _ in market.companies {
+        append(&widget.company_list, id)
+    }
+    slice.sort(widget.company_list[:])
+
+	widget.selected_id = -1
+
+	base_color := rl.GRAY
+
+	widget.stock_list_box = make_box(.Vertical, .Start, .Fill, 4)
+
+	widget.stock_price_labels = make([dynamic]^Component)
+    for id in widget.company_list {
+    	company := &market.companies[id]
+    	stock_price_label := make_label("-", global.font_small, 18, rl.BLACK, .Right)
+    	append(&widget.stock_price_labels, stock_price_label)
+        box_add_child(widget.stock_list_box,
+            make_simple_button(.OnRelease, rl.DARKGRAY, {},
+            	make_box(.Horizontal, .SpaceBetween, .Center, 12,
+            		make_box(.Horizontal, .Start, .Center, 12,
+            			make_pill(rl.GRAY, {60.0, 0.0},
+	            			make_label(fmt.tprintf("%s", company.ticker_symbol), global.font_small_italic, 18, rl.BLACK, .Center),
+	        			),
+	        			make_label(fmt.tprintf("%s", company.name), global.font, 24, rl.BLACK, .Left),
+        			),
+            		stock_price_label,
+        		),
+        	),
+        )
+    }
+
+    widget.name_label  = make_label("-", global.font, 24, rl.BLACK)
+    widget.price_label = make_label("-", global.font_small, 18, rl.BLACK)
+    widget.available_label = make_label("-", global.font_small, 18, rl.BLACK)
+    widget.owned_label = make_label("-", global.font_small, 18, rl.BLACK)
+    widget.profit_loss_label = make_label("-", global.font_small, 18, rl.BLACK)
+
+    widget.buy_button = make_simple_button(.OnRelease, rl.GRAY, {100.0, 0.0},
+    	make_label("Buy 1", global.font, 24, rl.BLACK),
+	)
+	widget.sell_button = make_simple_button(.OnRelease, rl.GRAY, {100.0, 0.0},
+    	make_label("Sell 1", global.font, 24, rl.BLACK),
+	)
+
+    widget.detail_root = make_panel(rl.DARKGRAY, {0, 200},
+        make_margin(8, 8, 8, 8,
+        	make_box(.Vertical, .Start, .Start, 10,
+	            widget.name_label,
+	            widget.price_label,
+    	        widget.available_label,
+    	        make_box(.Horizontal, .Start, .Fill, 8,
+    	        	widget.owned_label,
+    	        	widget.profit_loss_label,
+	        	),
+    	        make_box(.Horizontal, .Start, .Fill, 8,
+    	        	widget.buy_button,
+    	        	widget.sell_button,
+	        	),
+        	),
+    	),
+    )
+
+    stock_panel := make_anchor(.Center,
+        make_panel(base_color, {},
+    		make_margin(16, 16, 16, 16,
+    			make_box(.Vertical, .Start, .Fill, 10,
+	                make_label("Stock Market", global.font_large, 28, rl.WHITE),
+	                make_scroll_container({600.0, 400.0}, widget.stock_list_box),
+	                widget.detail_root,
+	            ),
+			),
+    	),
+    )
+
+	widget.root = stock_panel
+
+	return widget
+}
+
+update_stock_window :: proc(window: ^StockWindow, market: ^stocks.StockMarket, portfolio: ^stocks.StockPortfolio) {
+	for id, i in window.company_list {
+		company := &market.companies[id]
+		label_set_text(window.stock_price_labels[i], fmt.tprintf("$%.2f", company.current_price))
+	}
+
+    if company, ok := &market.companies[window.selected_id]; ok {
+        window.detail_root.state = .Active
+
+        stock_info := &portfolio.stocks[window.selected_id]
+        available_stocks := stocks.get_available_shares(company, stock_info)
+
+        label_set_text(window.name_label, company.name)
+        label_set_text(window.price_label, fmt.tprintf("$%.2f per share", company.current_price))
+        label_set_text(window.available_label, fmt.tprintf("%s shares available", global.format_int_thousands(available_stocks)))
+        if stock_info.quantity_owned > 0 {
+        	window.profit_loss_label.state = .Active
+        	label_set_text(window.owned_label,
+        		fmt.tprintf(
+        			"You own %s shares @ %s",
+        			global.format_int_thousands(stock_info.quantity_owned),
+        			global.format_float_thousands(stock_info.average_cost, 2),
+    			),
+    		)
+    		unrealized_profit_loss := (company.current_price / stock_info.average_cost) - 1.0
+    		if global.is_approx_zero(unrealized_profit_loss) {
+    			label_set_color(window.profit_loss_label, rl.BLACK)
+    			label_set_text(window.profit_loss_label, "[0.00 %]")
+    		} else if unrealized_profit_loss < 0.0 {
+    			label_set_color(window.profit_loss_label, rl.RED)
+    			label_set_text(window.profit_loss_label, fmt.tprintf("[%s %%]", global.format_float_thousands(unrealized_profit_loss * 100.0, 2)))
+    		} else if unrealized_profit_loss > 0.0 {
+    			label_set_color(window.profit_loss_label, rl.GREEN)
+    			label_set_text(window.profit_loss_label, fmt.tprintf("[+%s %%]", global.format_float_thousands(unrealized_profit_loss * 100.0, 2)))
+    		}
+        } else {
+        	label_set_text(window.owned_label, "You own no shares")
+        	window.profit_loss_label.state = .Hidden
+        }
+    } else {
+        window.detail_root.state = .Hidden
+    }
+}
+
 // -----------------------------------------
 
 update_components_recursive :: proc(component: ^Component, base_rect: rl.Rectangle) {
@@ -746,7 +923,7 @@ update_components_recursive :: proc(component: ^Component, base_rect: rl.Rectang
 
 @(private="file")
 get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
-	if component == nil do return {}
+	if component == nil || component.state == .Inactive do return {}
 
 	desired_size: rl.Vector2
 
@@ -781,13 +958,18 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 		desired_size = get_desired_size(v.child)
 		desired_size.x += f32(v.margin_left + v.margin_right)
 		desired_size.y += f32(v.margin_top + v.margin_bottom)
+	case ScrollContainer:
+		if v.child != nil {
+            _ = get_desired_size(v.child)
+        }
+		desired_size = component.min_size
 	case Panel:
 		desired_size = get_desired_size(v.child)
 		desired_size = {max(component.min_size.x, desired_size.x), max(component.min_size.y, desired_size.y)}
 	case Pill:
-		child_desired_size := get_desired_size(v.child)
+		child_desired_size := get_desired_size(v.child) + {0.0, 2.0}
 		desired_size.x = child_desired_size.x + child_desired_size.y
-		desired_size.y = child_desired_size.y + 2
+		desired_size.y = child_desired_size.y
 		desired_size = {max(component.min_size.x, desired_size.x), max(component.min_size.y, desired_size.y)}
 	case SimpleButton:
 		child_desired_size := get_desired_size(v.child)
@@ -810,12 +992,12 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 
 @(private="file")
 arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
-	if component == nil do return
+	if component == nil || component.state == .Inactive do return
 
 	component.position = {actual_rect.x, actual_rect.y}
 	component.size     = {actual_rect.width, actual_rect.height}
 
-	switch v in component.variant {
+	switch &v in component.variant {
 	case StackContainer:
 		for child in v.children {
 			arrange_components(child, actual_rect)
@@ -990,6 +1172,23 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 			arrange_components(v.child, child_rect)
 		}
 
+	case ScrollContainer:
+		if v.child != nil {
+            v.viewport_height = actual_rect.height
+            v.content_height  = v.child.desired_size.y
+            v.scrollable_range = max(0.0, v.content_height - v.viewport_height)
+
+            v.scroll_y = math.clamp(v.scroll_y, 0.0, v.scrollable_range)
+
+            child_full_rect := rl.Rectangle{
+                actual_rect.x,
+                actual_rect.y - v.scroll_y,
+                actual_rect.width - (v.content_height > v.viewport_height ? 16.0 : 0.0),
+                v.child.desired_size.y,
+            }
+            arrange_components(v.child, child_full_rect)
+        }
+
 	case Panel:
 		if v.child != nil {
 			arrange_components(v.child, actual_rect)
@@ -1008,13 +1207,18 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 
 	case SimpleButton:
 		if v.child != nil {
-			child_w := v.child.desired_size.x
-			child_h := v.child.desired_size.y
+			padding_x := v.padding * 2
+            padding_y := v.padding * 2
 
-			child_x := actual_rect.x + (actual_rect.width  - child_w) * 0.5
-			child_y := actual_rect.y + (actual_rect.height - child_h) * 0.5
+			safe_width  := max(0.0, actual_rect.width - padding_x)
+            safe_height := max(0.0, actual_rect.height - padding_y)
 
-			child_rect := rl.Rectangle{child_x, child_y, child_w, child_h}
+			child_rect := rl.Rectangle{
+                x      = actual_rect.x + v.padding,
+                y      = actual_rect.y + v.padding,
+                width  = safe_width,
+                height = safe_height,
+            }
 
 			arrange_components(v.child, child_rect)
 		}
@@ -1029,7 +1233,7 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 }
 
 handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInput) -> bool {
-	if component == nil do return false
+	if component == nil || component.state != .Active do return false
 
 	captured := false
 	mouse_pos := input_data.mouse_position
@@ -1058,6 +1262,29 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 			if handle_input_recursive(v.child, input_data) do captured = true
 		}
 
+	case ScrollContainer:
+		is_hovered := rl.CheckCollisionPointRec(mouse_pos, rect)
+
+		real_mouse_pos := input_data.mouse_position
+
+		if !is_hovered {
+			input_data.mouse_position = {-99999, -99999}
+		}
+
+	    if v.child != nil {
+	        if handle_input_recursive(v.child, input_data) do captured = true
+	    }
+
+	    input_data.mouse_position = real_mouse_pos
+
+	    if is_hovered {
+	        if v.scrollable_range > 0.0 && input_data.mouse_wheel_movement != 0.0 {
+	        	captured = true
+	            scroll_delta := input_data.mouse_wheel_movement * 20.0
+	            v.scroll_y = math.clamp(v.scroll_y - scroll_delta, 0.0, v.scrollable_range)
+	        }
+	    }
+
 	case Panel:
 		captured = rl.CheckCollisionPointRec(mouse_pos, rect)
 		if v.child != nil {
@@ -1073,27 +1300,21 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 	case SimpleButton:
 		is_hovered := rl.CheckCollisionPointRec(mouse_pos, rect)
 		mouse_button_pressed := input.is_mouse_button_held_down(.LEFT, input_data)
+		mouse_button_just_pressed := input.is_mouse_button_pressed_this_frame(.LEFT, input_data)
 
 		captured = is_hovered
 
 		if v.state != .Disabled {
-			if v.state == .Pressed {
-				if is_hovered && !mouse_button_pressed {
+			if is_hovered {
+				if mouse_button_just_pressed {
+					v.state = .Pressed
+				} else if !mouse_button_pressed && v.state == .Pressed {
 					v.state = .Released
-					if v.on_click != nil do v.on_click()
-				} else if !is_hovered && !mouse_button_pressed {
-					v.state = .Idle
+				} else if !mouse_button_pressed {
+					v.state = .Hovered
 				}
 			} else {
-				if is_hovered {
-					if mouse_button_pressed {
-						v.state = .Pressed
-					} else {
-						v.state = .Hovered
-					}
-				} else {
-					v.state = .Idle
-				}
+				v.state = .Idle
 			}
 		}
 
@@ -1105,34 +1326,27 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 		center := rl.Vector2{rect.x + rect.width * 0.5, rect.y + rect.height * 0.5}
 		is_hovered := rl.Vector2Distance(center, mouse_pos) <= rect.width * 0.5
 		mouse_button_pressed := input.is_mouse_button_held_down(.LEFT, input_data)
+		mouse_button_just_pressed := input.is_mouse_button_pressed_this_frame(.LEFT, input_data)
 
 		captured = is_hovered
 
 		if v.state != .Disabled {
-			if v.state == .Pressed {
-				if is_hovered && !mouse_button_pressed {
-					v.state = .Released
-
+			if is_hovered {
+				if mouse_button_just_pressed {
+					v.state = .Pressed
+				} else if !mouse_button_pressed && v.state == .Pressed {
 					if !v.selected {
+						v.state = .Released
 						v.selected = true
 						for other_button in v.connected_radio_buttons {
 							radio_button_set_state(other_button, false)
 						}
 					}
-
-				} else if !is_hovered && !mouse_button_pressed {
-					v.state = .Idle
+				} else if !mouse_button_pressed {
+					v.state = .Hovered
 				}
 			} else {
-				if is_hovered {
-					if mouse_button_pressed {
-						v.state = .Pressed
-					} else {
-						v.state = .Hovered
-					}
-				} else {
-					v.state = .Idle
-				}
+				v.state = .Idle
 			}
 		}
 
@@ -1179,7 +1393,7 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 }
 
 draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
-	if component == nil do return
+	if component == nil || component.state != .Active do return
 
 	switch v in component.variant {
 	case StackContainer:
@@ -1194,6 +1408,41 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 		}
 	case MarginContainer:
 		draw_components_recursive(v.child, debug)
+	case ScrollContainer:
+		if v.child != nil {
+			if v.scrollable_range > 0.0 {
+				rl.DrawCircleV({component.position.x + component.size.x - 7.0, component.position.y + 7.0}, 7.0, rl.DARKGRAY)
+				rl.DrawCircleV({component.position.x + component.size.x - 7.0, component.position.y + component.size.y - 7.0}, 7.0, rl.DARKGRAY)
+
+		        rl.DrawRectangleV(
+		        	{component.position.x + component.size.x - 14.0, component.position.y + 7.0},
+		        	{14.0, component.size.y - 14.0},
+		        	rl.DARKGRAY,
+	        	)
+
+		        scroll_amount := v.scroll_y / v.scrollable_range
+
+	        	scroll_knob_length := v.scrollable_range
+	        	scroll_knob_start_bottom := v.viewport_height - v.scrollable_range
+
+	        	scroll_knob_start := scroll_knob_start_bottom * scroll_amount
+	        	scroll_know_end := scroll_knob_start + scroll_knob_length
+
+	        	rl.DrawCircleV({component.position.x + component.size.x - 7.0, component.position.y + scroll_knob_start + 7.0}, 7.0, rl.RAYWHITE)
+	        	rl.DrawCircleV({component.position.x + component.size.x - 7.0, component.position.y + scroll_know_end - 7.0}, 7.0, rl.RAYWHITE)
+	        	rl.DrawRectangleV({component.position.x + component.size.x - 14.0, component.position.y + scroll_knob_start + 7.0}, {14.0, scroll_knob_length - 14.0}, rl.RAYWHITE)
+				}
+
+	        rl.BeginScissorMode(
+	            i32(component.position.x),
+	            i32(component.position.y),
+	            i32(component.size.x),
+	            i32(component.size.y),
+	        )
+	        draw_components_recursive(v.child, debug)
+
+	        rl.EndScissorMode()
+	    }
 	case Panel:
 		rl.DrawRectangleV(component.position, component.size, v.color)
 		draw_components_recursive(v.child, debug)
@@ -1389,6 +1638,9 @@ destroy_components_recursive :: proc(component: ^Component) {
 	case MarginContainer:
 		destroy_components_recursive(v.child)
 		//fmt.println("Freeing MarginContainer!")
+	case ScrollContainer:
+		destroy_components_recursive(v.child)
+		//fmt.println("Freeing ScrollContainer!")
 	case Panel:
 		destroy_components_recursive(v.child)
 		//fmt.println("Freeing Panel!")
