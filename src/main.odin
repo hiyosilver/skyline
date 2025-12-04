@@ -36,8 +36,10 @@ GameState :: struct {
     paused: bool,
     tick_speed: f32,
     tick_timer: f32,
-    period_length: int,
     current_tick: int,
+    current_period: int,
+    current_quarter: int,
+    current_year: int,
 
     //Game data
     money: f64,
@@ -53,7 +55,7 @@ GameState :: struct {
     tick_stats_buffer: [dynamic]TickStatistics,
     tick_stats_buffer_size: int,
 
-    stock_market: stocks.StockMarket,
+    market: stocks.Market,
     stock_portfolio: stocks.StockPortfolio,
 }
 
@@ -138,15 +140,17 @@ main :: proc() {
     */
 
     game_state.tick_speed = 1.0
-    game_state.period_length = 30
     game_state.current_tick = 1
+    game_state.current_period = 1
+    game_state.current_quarter = 1
+    game_state.current_year = 1
     game_state.money = 100.0
     game_state.base_tax_rate = 0.15
     game_state.tax_debt_interest_rate = 0.005
     game_state.tick_stats_buffer = make([dynamic]TickStatistics)
     game_state.tick_stats_buffer_size = 30
-    game_state.stock_market = stocks.create_stock_market()
-    game_state.stock_portfolio = stocks.create_stock_portfolio(&game_state.stock_market)
+    game_state.market = stocks.create_market()
+    game_state.stock_portfolio = stocks.create_stock_portfolio(&game_state.market)
 
     exe_path = os.args[0]
     exe_dir = filepath.dir(exe_path)
@@ -325,7 +329,7 @@ main :: proc() {
         ),
     )
 
-    stock_window = ui.make_stock_window(&game_state.stock_market)
+    stock_window = ui.make_stock_window(&game_state.market)
     stock_window.root.state = .Inactive
 
     ui_root = ui.make_stack(
@@ -415,7 +419,7 @@ cleanup :: proc() {
     delete(crew_member_entries)
     delete(game_state.tick_stats_buffer)
 
-    stocks.close_stock_market(&game_state.stock_market)
+    stocks.close_market(&game_state.market)
 
     ui.destroy_components_recursive(ui_root)
 }
@@ -452,11 +456,11 @@ handle_stock_window_interactions :: proc() {
     }
 
     if ui.button_was_clicked(stock_window.buy_button) {
-        stocks.execute_buy_order(&game_state.stock_market, &game_state.stock_portfolio, &game_state.money, stock_window.selected_id, 1)
+        stocks.execute_buy_order(&game_state.market, &game_state.stock_portfolio, &game_state.money, stock_window.selected_id, 1)
     }
 
     if ui.button_was_clicked(stock_window.sell_button) {
-        stocks.execute_sell_order(&game_state.stock_market, &game_state.stock_portfolio, &game_state.money, &game_state.period_income, stock_window.selected_id, 1)
+        stocks.execute_sell_order(&game_state.market, &game_state.stock_portfolio, &game_state.money, &game_state.period_income, stock_window.selected_id, 1)
     }
 }
 
@@ -567,7 +571,7 @@ update :: proc(input_data: ^input.RawInput) {
 }
 
 sync_ui_visuals :: proc() {
-    ui.update_stock_window(&stock_window, &game_state.stock_market, &game_state.stock_portfolio)
+    ui.update_stock_window(&stock_window, &game_state.market, &game_state.stock_portfolio)
 
     for &entry in job_entries {
         ui.update_job_display(&entry.display, &entry.job, game_state.tick_timer, game_state.tick_speed)
@@ -626,15 +630,31 @@ tick :: proc() {
     }
 
     game_state.current_tick += 1
-    if game_state.current_tick == game_state.period_length {
+    stocks.update_market_tick(&game_state.market)
+    if game_state.current_tick == global.TICKS_PER_PERIOD {
         ui.loading_bar_set_color(tick_bar_component, rl.RED)
-    }
-    if game_state.current_tick > game_state.period_length {
+    } else if game_state.current_tick > global.TICKS_PER_PERIOD {
         game_state.current_tick = 1
 
         ui.loading_bar_set_color(tick_bar_component, rl.ORANGE)
 
+        fmt.println("Update market period!")
         calculate_period_end(&tick_stats)
+        game_state.current_period += 1
+
+        if (game_state.current_period - 1) % global.PERIODS_PER_QUARTER == 0 {
+            game_state.current_period = 1
+
+            fmt.println("Update market quarter!")
+            stocks.update_market_quarter(&game_state.market)
+            game_state.current_quarter += 1
+        }
+        if game_state.current_quarter > global.QUARTERS_PER_YEAR {
+            game_state.current_quarter = 1
+            fmt.println("Update market year!")
+            stocks.update_market_year(&game_state.market)
+            game_state.current_year += 1
+        }
     }
 
     switch  {
@@ -664,8 +684,6 @@ tick :: proc() {
     }
 
     update_graph()
-
-    stocks.update_stock_market(&game_state.stock_market)
 }
 
 update_graph :: proc() {
@@ -783,6 +801,8 @@ calculate_period_end :: proc(tick_stats: ^TickStatistics) {
 
     tick_stats.tax_debt = game_state.tax_debt
     game_state.period_income = 0.0
+
+    stocks.update_market_period(&game_state.market)
 }
 
 remove_crew_member :: proc(entry_index: int) {
@@ -841,16 +861,16 @@ draw :: proc(alpha: f32) {
 
     circle_radius : f32 = 12.0
     ring_width : f32 = 4.0
-    period_display_width := game_state.period_length * (int(circle_radius) * 2) + (game_state.period_length - 1) * 2
+    period_display_width := global.TICKS_PER_PERIOD * (int(circle_radius) * 2) + (global.TICKS_PER_PERIOD - 1) * 2
     origin := rl.Vector2{global.SCREEN_WIDTH * 0.5 - f32(period_display_width) * 0.5 + circle_radius, 16}
 
     circle_progress := 1.0 - (game_state.tick_timer / game_state.tick_speed)
     angle := (360 * circle_progress) - 90
 
-    rl.DrawLineEx(origin, origin + {(circle_radius * 2 + 2) * f32(game_state.period_length - 1), 0}, 6.0, rl.DARKGRAY)
+    rl.DrawLineEx(origin, origin + {(circle_radius * 2 + 2) * f32(global.TICKS_PER_PERIOD - 1), 0}, 6.0, rl.DARKGRAY)
 
-    for i in 0..<game_state.period_length {
-        base_color := i == game_state.period_length - 1 ? rl.RED : rl.ORANGE
+    for i in 0..<global.TICKS_PER_PERIOD {
+        base_color := i == global.TICKS_PER_PERIOD - 1 ? rl.RED : rl.ORANGE
         rl.DrawCircleV(origin, circle_radius, (i + 1) == game_state.current_tick ? rl.RAYWHITE : rl.DARKGRAY)
         rl.DrawRing(origin, circle_radius - ring_width, circle_radius - 2.0, 0.0, 360.0, 16, base_color)
         if (i + 1) < game_state.current_tick {

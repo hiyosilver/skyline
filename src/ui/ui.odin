@@ -176,7 +176,7 @@ ScrollContainer :: struct {
     content_height:  f32,        // Calculated max height of the content
     viewport_height: f32,        // The height the parent allocated to this container
     scrollable_range: f32,       // content_height - viewport_height
-    scroll_bar_dragging: bool,
+    scroll_bar_dragging: bool,	 // Tracks if the scroll bar is currently being dragged
 }
 
 make_scroll_container :: proc(min_size: rl.Vector2, child: ^Component = nil) -> ^Component {
@@ -774,21 +774,31 @@ StockWindow :: struct {
 
 	selected_id: stocks.CompanyID,
 	company_list: [dynamic]stocks.CompanyID,
+	rating_labels: [dynamic]^Component,
 	stock_price_labels: [dynamic]^Component,
 
 	stock_list_box: ^Component,
 
 	detail_root:    ^Component,
     name_label:     ^Component,
+    rating_label:     ^Component,
     price_label:    ^Component,
     available_label:    ^Component,
     owned_label:    ^Component,
     profit_loss_label:    ^Component,
     buy_button:    ^Component,
     sell_button:    ^Component,
+
+    DEBUG_earnings_per_share_label: ^Component,
+    DEBUG_sentiment_multiplier_label: ^Component,
+    DEBUG_volatility_label: ^Component,
+    DEBUG_momentum_label: ^Component,
+    DEBUG_growth_rate_label: ^Component,
+    DEBUG_credit_rating_label: ^Component,
+    DEBUG_payout_ratio_label: ^Component,
 }
 
-make_stock_window :: proc(market: ^stocks.StockMarket) -> StockWindow {
+make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 	widget: StockWindow = {}
 
 	widget.company_list = make([dynamic]stocks.CompanyID)
@@ -803,10 +813,13 @@ make_stock_window :: proc(market: ^stocks.StockMarket) -> StockWindow {
 
 	widget.stock_list_box = make_box(.Vertical, .Start, .Fill, 4)
 
+	widget.rating_labels = make([dynamic]^Component)
 	widget.stock_price_labels = make([dynamic]^Component)
     for id in widget.company_list {
     	company := &market.companies[id]
+    	rating_label := make_label("-", global.font_small_italic, 18, rl.BLACK, .Right)
     	stock_price_label := make_label("-", global.font_small, 18, rl.BLACK, .Right)
+    	append(&widget.rating_labels, rating_label)
     	append(&widget.stock_price_labels, stock_price_label)
         box_add_child(widget.stock_list_box,
             make_simple_button(.OnRelease, rl.DARKGRAY, {},
@@ -816,6 +829,7 @@ make_stock_window :: proc(market: ^stocks.StockMarket) -> StockWindow {
 	            			make_label(fmt.tprintf("%s", company.ticker_symbol), global.font_small_italic, 18, rl.BLACK, .Center),
 	        			),
 	        			make_label(fmt.tprintf("%s", company.name), global.font, 24, rl.BLACK, .Left),
+	        			rating_label,
         			),
             		stock_price_label,
         		),
@@ -824,6 +838,7 @@ make_stock_window :: proc(market: ^stocks.StockMarket) -> StockWindow {
     }
 
     widget.name_label  = make_label("-", global.font, 24, rl.BLACK)
+    widget.rating_label  = make_label("-", global.font_small_italic, 18, rl.BLACK)
     widget.price_label = make_label("-", global.font_small, 18, rl.BLACK)
     widget.available_label = make_label("-", global.font_small, 18, rl.BLACK)
     widget.owned_label = make_label("-", global.font_small, 18, rl.BLACK)
@@ -836,21 +851,43 @@ make_stock_window :: proc(market: ^stocks.StockMarket) -> StockWindow {
     	make_label("Sell 1", global.font, 24, rl.BLACK),
 	)
 
+	widget.DEBUG_earnings_per_share_label = make_label("-", global.font_small, 18, rl.BLACK)
+    widget.DEBUG_sentiment_multiplier_label = make_label("-", global.font_small, 18, rl.BLACK)
+    widget.DEBUG_volatility_label = make_label("-", global.font_small, 18, rl.BLACK)
+    widget.DEBUG_momentum_label = make_label("-", global.font_small, 18, rl.BLACK)
+    widget.DEBUG_growth_rate_label = make_label("-", global.font_small, 18, rl.BLACK)
+    widget.DEBUG_credit_rating_label = make_label("-", global.font_small, 18, rl.BLACK)
+    widget.DEBUG_payout_ratio_label = make_label("-", global.font_small, 18, rl.BLACK)
+
     widget.detail_root = make_panel(rl.DARKGRAY, {0, 200},
         make_margin(8, 8, 8, 8,
-        	make_box(.Vertical, .Start, .Start, 10,
-	            widget.name_label,
-	            widget.price_label,
-    	        widget.available_label,
-    	        make_box(.Horizontal, .Start, .Fill, 8,
-    	        	widget.owned_label,
-    	        	widget.profit_loss_label,
+        	make_box(.Horizontal, .SpaceBetween, .Fill, 16,
+        		make_box(.Vertical, .Start, .Start, 10,
+		            make_box(.Horizontal, .Start, .Start, 8,
+	            		widget.name_label,
+	            		widget.rating_label,
+	            	),
+		            widget.price_label,
+	    	        widget.available_label,
+	    	        make_box(.Horizontal, .Start, .Fill, 8,
+	    	        	widget.owned_label,
+	    	        	widget.profit_loss_label,
+		        	),
+	    	        make_box(.Horizontal, .Start, .Fill, 8,
+	    	        	widget.buy_button,
+	    	        	widget.sell_button,
+		        	),
 	        	),
-    	        make_box(.Horizontal, .Start, .Fill, 8,
-    	        	widget.buy_button,
-    	        	widget.sell_button,
+	        	make_box(.Vertical, .Start, .Start, 10,
+		            widget.DEBUG_earnings_per_share_label,
+				    widget.DEBUG_sentiment_multiplier_label,
+				    widget.DEBUG_volatility_label,
+				    widget.DEBUG_momentum_label,
+				    widget.DEBUG_growth_rate_label,
+				    widget.DEBUG_credit_rating_label,
+				    widget.DEBUG_payout_ratio_label,
 	        	),
-        	),
+    		),
     	),
     )
 
@@ -871,9 +908,14 @@ make_stock_window :: proc(market: ^stocks.StockMarket) -> StockWindow {
 	return widget
 }
 
-update_stock_window :: proc(window: ^StockWindow, market: ^stocks.StockMarket, portfolio: ^stocks.StockPortfolio) {
+update_stock_window :: proc(window: ^StockWindow, market: ^stocks.Market, portfolio: ^stocks.StockPortfolio) {
 	for id, i in window.company_list {
 		company := &market.companies[id]
+
+		rating := stocks.score_to_rating(company.credit_rating)
+        label, _, color := stocks.get_rating_data(rating)
+        label_set_color(window.rating_labels[i], color)
+		label_set_text(window.rating_labels[i], label)
 		label_set_text(window.stock_price_labels[i], fmt.tprintf("$%.2f", company.current_price))
 	}
 
@@ -884,6 +926,12 @@ update_stock_window :: proc(window: ^StockWindow, market: ^stocks.StockMarket, p
         available_stocks := stocks.get_available_shares(company, stock_info)
 
         label_set_text(window.name_label, company.name)
+
+        rating := stocks.score_to_rating(company.credit_rating)
+        label, _, color := stocks.get_rating_data(rating)
+
+        label_set_color(window.rating_label, color)
+        label_set_text(window.rating_label, label)
         label_set_text(window.price_label, fmt.tprintf("$%.2f per share", company.current_price))
         label_set_text(window.available_label, fmt.tprintf("%s shares available", global.format_int_thousands(available_stocks)))
         if stock_info.quantity_owned > 0 {
@@ -910,6 +958,16 @@ update_stock_window :: proc(window: ^StockWindow, market: ^stocks.StockMarket, p
         	label_set_text(window.owned_label, "You own no shares")
         	window.profit_loss_label.state = .Hidden
         }
+
+
+        label_set_text(window.DEBUG_earnings_per_share_label, fmt.tprintf("DEBUG EPS: %f", company.earnings_per_share))
+	    label_set_text(window.DEBUG_sentiment_multiplier_label, fmt.tprintf("DEBUG Sentiment: %f", company.sentiment_multiplier))
+		label_set_text(window.DEBUG_volatility_label, fmt.tprintf("DEBUG volatility: %f", company.volatility))
+		label_set_text(window.DEBUG_momentum_label, fmt.tprintf("DEBUG momentum: %f", company.momentum))
+	    label_set_text(window.DEBUG_growth_rate_label, fmt.tprintf("DEBUG growth rate: %f", company.growth_rate))
+	    label_set_text(window.DEBUG_credit_rating_label, fmt.tprintf("DEBUG credit rating: %d", company.credit_rating))
+	    label_set_text(window.DEBUG_payout_ratio_label, fmt.tprintf("DEBUG payout ratio: %f", company.payout_ratio))
+
     } else {
         window.detail_root.state = .Hidden
     }
