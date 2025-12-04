@@ -31,6 +31,7 @@ ComponentVariant :: union {
 	MarginContainer,
 	ScrollContainer,
 	Panel,
+	TexturePanel,
 	Pill,
 	SimpleButton,
 	RadioButton,
@@ -206,6 +207,35 @@ make_panel :: proc(color: rl.Color, min_size: rl.Vector2, child: ^Component = ni
 	}
 
 	return c
+}
+
+TexturePanel :: struct {
+	child: ^Component,
+	texture: rl.Texture2D,
+	tint_color: rl.Color,
+}
+
+make_texture_panel :: proc(texture: rl.Texture2D, min_size: rl.Vector2, tint_color: rl.Color = rl.WHITE, child: ^Component = nil) -> ^Component {
+	c := new(Component)
+
+	c.size = min_size
+	c.min_size = min_size
+
+	c.variant = TexturePanel{
+		texture    = texture,
+		tint_color = tint_color,
+		child    = child,
+	}
+
+	return c
+}
+
+texture_panel_set_tint_color :: proc(component: ^Component, tint_color: rl.Color) {
+	if component == nil do return
+
+	if texture_panel, ok := &component.variant.(TexturePanel); ok {
+		texture_panel.tint_color = tint_color
+	}
 }
 
 Pill :: struct {
@@ -775,6 +805,7 @@ StockWindow :: struct {
 	selected_id: stocks.CompanyID,
 	company_list: [dynamic]stocks.CompanyID,
 	rating_labels: [dynamic]^Component,
+	status_texture_panels: [dynamic]^Component,
 	stock_price_labels: [dynamic]^Component,
 
 	stock_list_box: ^Component,
@@ -792,6 +823,7 @@ StockWindow :: struct {
     DEBUG_earnings_per_share_label: ^Component,
     DEBUG_sentiment_multiplier_label: ^Component,
     DEBUG_volatility_label: ^Component,
+    DEBUG_momentum_equilibrium_label: ^Component,
     DEBUG_momentum_label: ^Component,
     DEBUG_growth_rate_label: ^Component,
     DEBUG_credit_rating_label: ^Component,
@@ -814,12 +846,16 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 	widget.stock_list_box = make_box(.Vertical, .Start, .Fill, 4)
 
 	widget.rating_labels = make([dynamic]^Component)
+	widget.status_texture_panels = make([dynamic]^Component)
 	widget.stock_price_labels = make([dynamic]^Component)
     for id in widget.company_list {
     	company := &market.companies[id]
     	rating_label := make_label("-", global.font_small_italic, 18, rl.BLACK, .Right)
+    	status_texture_panel := make_texture_panel(textures.ui_textures[.Circle], {8.0, 8.0})
+    	status_texture_panel.state = .Hidden
     	stock_price_label := make_label("-", global.font_small, 18, rl.BLACK, .Right)
     	append(&widget.rating_labels, rating_label)
+    	append(&widget.status_texture_panels, status_texture_panel)
     	append(&widget.stock_price_labels, stock_price_label)
         box_add_child(widget.stock_list_box,
             make_simple_button(.OnRelease, rl.DARKGRAY, {},
@@ -831,7 +867,10 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 	        			make_label(fmt.tprintf("%s", company.name), global.font, 24, rl.BLACK, .Left),
 	        			rating_label,
         			),
-            		stock_price_label,
+        			make_box(.Horizontal, .Start, .Center, 8,
+            			status_texture_panel,
+	        			stock_price_label,
+        			),
         		),
         	),
         )
@@ -854,6 +893,7 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 	widget.DEBUG_earnings_per_share_label = make_label("-", global.font_small, 18, rl.BLACK)
     widget.DEBUG_sentiment_multiplier_label = make_label("-", global.font_small, 18, rl.BLACK)
     widget.DEBUG_volatility_label = make_label("-", global.font_small, 18, rl.BLACK)
+    widget.DEBUG_momentum_equilibrium_label = make_label("-", global.font_small, 18, rl.BLACK)
     widget.DEBUG_momentum_label = make_label("-", global.font_small, 18, rl.BLACK)
     widget.DEBUG_growth_rate_label = make_label("-", global.font_small, 18, rl.BLACK)
     widget.DEBUG_credit_rating_label = make_label("-", global.font_small, 18, rl.BLACK)
@@ -882,6 +922,7 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 		            widget.DEBUG_earnings_per_share_label,
 				    widget.DEBUG_sentiment_multiplier_label,
 				    widget.DEBUG_volatility_label,
+				    widget.DEBUG_momentum_equilibrium_label,
 				    widget.DEBUG_momentum_label,
 				    widget.DEBUG_growth_rate_label,
 				    widget.DEBUG_credit_rating_label,
@@ -911,11 +952,27 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 update_stock_window :: proc(window: ^StockWindow, market: ^stocks.Market, portfolio: ^stocks.StockPortfolio) {
 	for id, i in window.company_list {
 		company := &market.companies[id]
+		stock_info := &portfolio.stocks[id]
 
 		rating := stocks.score_to_rating(company.credit_rating)
         label, _, color := stocks.get_rating_data(rating)
         label_set_color(window.rating_labels[i], color)
 		label_set_text(window.rating_labels[i], label)
+		
+		if stock_info.quantity_owned > 0 {
+			window.status_texture_panels[i].state = .Active
+			unrealized_profit_loss := (company.current_price / stock_info.average_cost) - 1.0
+			if global.is_approx_zero(unrealized_profit_loss) {
+    			texture_panel_set_tint_color(window.status_texture_panels[i], rl.WHITE)
+    		} else if unrealized_profit_loss < 0.0 {
+    			texture_panel_set_tint_color(window.status_texture_panels[i], rl.RED)
+    		} else if unrealized_profit_loss > 0.0 {
+    			texture_panel_set_tint_color(window.status_texture_panels[i], rl.GREEN)
+    		}
+		} else {
+			window.status_texture_panels[i].state = .Hidden
+		}
+
 		label_set_text(window.stock_price_labels[i], fmt.tprintf("$%.2f", company.current_price))
 	}
 
@@ -963,6 +1020,7 @@ update_stock_window :: proc(window: ^StockWindow, market: ^stocks.Market, portfo
         label_set_text(window.DEBUG_earnings_per_share_label, fmt.tprintf("DEBUG EPS: %f", company.earnings_per_share))
 	    label_set_text(window.DEBUG_sentiment_multiplier_label, fmt.tprintf("DEBUG Sentiment: %f", company.sentiment_multiplier))
 		label_set_text(window.DEBUG_volatility_label, fmt.tprintf("DEBUG volatility: %f", company.volatility))
+		label_set_text(window.DEBUG_momentum_equilibrium_label, fmt.tprintf("DEBUG momentum equi: %f", company.momentum_equilibrium))
 		label_set_text(window.DEBUG_momentum_label, fmt.tprintf("DEBUG momentum: %f", company.momentum))
 	    label_set_text(window.DEBUG_growth_rate_label, fmt.tprintf("DEBUG growth rate: %f", company.growth_rate))
 	    label_set_text(window.DEBUG_credit_rating_label, fmt.tprintf("DEBUG credit rating: %d", company.credit_rating))
@@ -1023,6 +1081,9 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
         }
 		desired_size = component.min_size
 	case Panel:
+		desired_size = get_desired_size(v.child)
+		desired_size = {max(component.min_size.x, desired_size.x), max(component.min_size.y, desired_size.y)}
+	case TexturePanel:
 		desired_size = get_desired_size(v.child)
 		desired_size = {max(component.min_size.x, desired_size.x), max(component.min_size.y, desired_size.y)}
 	case Pill:
@@ -1253,6 +1314,11 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 			arrange_components(v.child, actual_rect)
 		}
 
+	case TexturePanel:
+		if v.child != nil {
+			arrange_components(v.child, actual_rect)
+		}
+
 	case Pill:
 		if v.child != nil {
 			child_rect := rl.Rectangle{
@@ -1370,6 +1436,12 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 	    }
 
 	case Panel:
+		captured = rl.CheckCollisionPointRec(mouse_pos, rect)
+		if v.child != nil {
+			if handle_input_recursive(v.child, input_data) do captured = true
+		}
+
+	case TexturePanel:
 		captured = rl.CheckCollisionPointRec(mouse_pos, rect)
 		if v.child != nil {
 			if handle_input_recursive(v.child, input_data) do captured = true
@@ -1531,6 +1603,14 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 	    }
 	case Panel:
 		rl.DrawRectangleV(component.position, component.size, v.color)
+		draw_components_recursive(v.child, debug)
+	case TexturePanel:
+		source := rl.Rectangle{0, 0, f32(v.texture.width), f32(v.texture.height)}
+		dest   := rl.Rectangle{
+			component.position.x, component.position.y,
+			component.size.x, component.size.y,
+		}
+		rl.DrawTexturePro(v.texture, source, dest, {}, 0, v.tint_color)
 		draw_components_recursive(v.child, debug)
 	case Pill:
 		offset := component.size.y * 0.5
@@ -1730,6 +1810,9 @@ destroy_components_recursive :: proc(component: ^Component) {
 	case Panel:
 		destroy_components_recursive(v.child)
 		//fmt.println("Freeing Panel!")
+	case TexturePanel:
+		destroy_components_recursive(v.child)
+		//fmt.println("Freeing TexturePanel!")
 	case Pill:
 		destroy_components_recursive(v.child)
 		//fmt.println("Freeing Pill!")

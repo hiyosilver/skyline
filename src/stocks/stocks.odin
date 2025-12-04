@@ -89,6 +89,7 @@ Company :: struct {
 	revenue_per_share: f64,
 	sentiment_multiplier: f64,
 	volatility: f64,
+	momentum_equilibrium: f64,
 	momentum: f64,
 	growth_rate: f64,
 	credit_rating: int,
@@ -126,7 +127,7 @@ create_company :: proc(
     actual_sentiment_multiplier := apply_fuzz(archetype.base_sentiment_multiplier, 0.15)
     actual_vol        := apply_fuzz(archetype.base_volatility, 0.1)
     actual_growth     := apply_fuzz(archetype.base_growth_rate, 0.2)
-    rating_var        := int(rand.float64() * 10) - 5 // +/- 5 points
+    rating_var        := int(rand.float64() * 10) - 5
     actual_credit     := clamp(archetype.base_credit_rating + rating_var, 1, 100)
     actual_payout     := clamp(apply_fuzz(archetype.base_payout_ratio, 0.1), 0.0, 1.0)
 
@@ -166,6 +167,7 @@ create_company :: proc(
         sentiment_multiplier = actual_sentiment_multiplier,
         revenue_per_share = revenue_guess,
         volatility = actual_vol,
+        momentum_equilibrium = 1.0,
         momentum = 1.0,
         growth_rate = actual_growth,
         credit_rating = actual_credit,
@@ -264,6 +266,8 @@ update_market_tick :: proc(market: ^Market) {
 		    speculative_value = company.revenue_per_share * company.growth_rate * 5.0
 		}
 
+        company.momentum = math.lerp(company.momentum, company.momentum_equilibrium, 0.1)
+
 		raw_price := (base_value + speculative_value) * company.sentiment_multiplier * company.momentum
 		company.current_price = math.max(raw_price, 0.01)
 
@@ -284,11 +288,11 @@ update_market_period :: proc(market: ^Market) {
 	unlucky_sector := CompanySector(unlucky_sector_index)
 
 	for _, &company in market.companies {
-		company.momentum = math.lerp(company.momentum, 1.0, 0.2)
+		company.momentum_equilibrium = math.lerp(company.momentum_equilibrium, 1.0, 0.2)
         if company.sector == lucky_sector {
-            company.momentum *= 1.05 
+            company.momentum_equilibrium *= 1.05 
         } else if company.sector == unlucky_sector {
-            company.momentum *= 0.95
+            company.momentum_equilibrium *= 0.95
         }
     }
 
