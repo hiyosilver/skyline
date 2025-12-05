@@ -246,6 +246,29 @@ calculate_total_market_cap :: proc(market: ^Market) -> f64 {
     return total
 }
 
+update_stock_price :: proc(company: ^Company) {
+	base_value := company.revenue_per_share * 0.5 
+
+	speculative_value : f64
+	if company.earnings_per_share > 0 {
+	    speculative_value = company.earnings_per_share * 15.0
+	} else {
+	    speculative_value = company.revenue_per_share * company.growth_rate * 5.0
+	}
+
+	raw_price := (base_value + speculative_value) * company.sentiment_multiplier * company.momentum
+	raw_price = math.max(raw_price, 0.01)
+
+	company.current_price = math.lerp(company.current_price, raw_price, 0.05)
+
+	if company.current_price > company.all_time_high {
+        company.all_time_high = company.current_price
+        company.expected_price = company.current_price
+    } else if company.current_price < company.all_time_low {
+        company.all_time_low = company.current_price
+    }
+}
+
 update_market_tick :: proc(market: ^Market) {
     ticks_per_year := f64(global.TICKS_PER_PERIOD * global.PERIODS_PER_QUARTER * global.QUARTERS_PER_YEAR)
     sqrt_time_tick := math.sqrt(ticks_per_year)
@@ -257,26 +280,9 @@ update_market_tick :: proc(market: ^Market) {
         company.sentiment_multiplier *= (1.0 + sentiment_shift)
         company.sentiment_multiplier = clamp(company.sentiment_multiplier, 0.5, 3.0)
 
-        base_value := company.revenue_per_share * 0.5 
-
-		speculative_value : f64
-		if company.earnings_per_share > 0 {
-		    speculative_value = company.earnings_per_share * 15.0
-		} else {
-		    speculative_value = company.revenue_per_share * company.growth_rate * 5.0
-		}
-
         company.momentum = math.lerp(company.momentum, company.momentum_equilibrium, 0.1)
 
-		raw_price := (base_value + speculative_value) * company.sentiment_multiplier * company.momentum
-		company.current_price = math.max(raw_price, 0.01)
-
-        if company.current_price > company.all_time_high {
-            company.all_time_high = company.current_price
-            company.expected_price = company.current_price
-        } else if company.current_price < company.all_time_low {
-            company.all_time_low = company.current_price
-        }
+        update_stock_price(&company)
     }
 }
 
@@ -304,9 +310,10 @@ update_market_quarter :: proc(market: ^Market) {
     sqrt_time_period := math.sqrt(quarters_per_year)
 
     for _, &company in market.companies {
-        quarter_growth_rate := company.growth_rate / quarters_per_year
-        eps_noise_scale := company.volatility / sqrt_time_period
-        actual_period_growth := quarter_growth_rate + (rand.norm_float64() * eps_noise_scale)
+        expected_growth := company.growth_rate / quarters_per_year
+        quarter_volatility := company.volatility / sqrt_time_period
+        random_sigma := clamp(rand.norm_float64(), -2.0, 2.0)
+        actual_period_growth := expected_growth + (quarter_volatility * random_sigma)
 
         magnitude := math.abs(company.earnings_per_share)
         if magnitude < 0.10 {
@@ -317,13 +324,15 @@ update_market_quarter :: proc(market: ^Market) {
 
         company.earnings_per_share += delta
         
-        growth_factor := delta / max(math.abs(company.earnings_per_share), 0.10)
+        growth_factor := actual_period_growth * 0.8
 
-		company.revenue_per_share *= (1.0 + (growth_factor)) 
+		company.revenue_per_share *= (1.0 + growth_factor) 
 
 		if company.revenue_per_share < company.earnings_per_share {
 		     company.revenue_per_share = company.earnings_per_share * 1.1
 		}
+
+		update_stock_price(&company)
 
         rating_change := 0
 		if company.current_price < (company.expected_price * 0.5) {

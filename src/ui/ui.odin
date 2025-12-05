@@ -230,6 +230,14 @@ make_texture_panel :: proc(texture: rl.Texture2D, min_size: rl.Vector2, tint_col
 	return c
 }
 
+texture_panel_set_texture :: proc(component: ^Component, texture: rl.Texture2D) {
+	if component == nil do return
+
+	if texture_panel, ok := &component.variant.(TexturePanel); ok {
+		texture_panel.texture = texture
+	}
+}
+
 texture_panel_set_tint_color :: proc(component: ^Component, tint_color: rl.Color) {
 	if component == nil do return
 
@@ -961,13 +969,15 @@ update_stock_window :: proc(window: ^StockWindow, market: ^stocks.Market, portfo
 		
 		if stock_info.quantity_owned > 0 {
 			window.status_texture_panels[i].state = .Active
-			unrealized_profit_loss := (company.current_price / stock_info.average_cost) - 1.0
-			if global.is_approx_zero(unrealized_profit_loss) {
+			unrealized_profit_loss_pct := ((company.current_price / stock_info.average_cost) - 1.0) * 100.0
+			if global.is_approx_zero(unrealized_profit_loss_pct) {
     			texture_panel_set_tint_color(window.status_texture_panels[i], rl.WHITE)
-    		} else if unrealized_profit_loss < 0.0 {
+    		} else if unrealized_profit_loss_pct < -5.0 {
     			texture_panel_set_tint_color(window.status_texture_panels[i], rl.RED)
-    		} else if unrealized_profit_loss > 0.0 {
+    		} else if unrealized_profit_loss_pct > 5.0 {
     			texture_panel_set_tint_color(window.status_texture_panels[i], rl.GREEN)
+    		} else {
+    			texture_panel_set_tint_color(window.status_texture_panels[i], rl.YELLOW)
     		}
 		} else {
 			window.status_texture_panels[i].state = .Hidden
