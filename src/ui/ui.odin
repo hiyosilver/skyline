@@ -39,6 +39,7 @@ ComponentVariant :: union {
 	Label,
 	LoadingBar,
 	Graph,
+	RangeIndicator,
 }
 
 make_component :: proc(variant: Component) -> ^Component {
@@ -174,20 +175,20 @@ make_margin :: proc(margin_top, margin_right, margin_bottom, margin_left: int, c
 ScrollContainer :: struct {
 	child: ^Component,
 	scroll_y:        f32,        // Tracks how far the view is scrolled down
-    content_height:  f32,        // Calculated max height of the content
-    viewport_height: f32,        // The height the parent allocated to this container
-    scrollable_range: f32,       // content_height - viewport_height
-    scroll_bar_dragging: bool,	 // Tracks if the scroll bar is currently being dragged
+	content_height:  f32,        // Calculated max height of the content
+	viewport_height: f32,        // The height the parent allocated to this container
+	scrollable_range: f32,       // content_height - viewport_height
+	scroll_bar_dragging: bool,	 // Tracks if the scroll bar is currently being dragged
 }
 
 make_scroll_container :: proc(min_size: rl.Vector2, child: ^Component = nil) -> ^Component {
-    c := new(Component)
-    c.min_size = min_size
+	c := new(Component)
+	c.min_size = min_size
 
-    c.variant = ScrollContainer{
-        child = child,
-    }
-    return c
+	c.variant = ScrollContainer{
+		child = child,
+	}
+	return c
 }
 
 Panel :: struct {
@@ -544,6 +545,38 @@ graph_set_point_size :: proc(component: ^Component, point_size: f32) {
 	}
 }
 
+RangeIndicator :: struct {
+    min_val, max_val, current_val: f64,
+    bar_color, knob_color, background_color: rl.Color,
+    show_labels: bool, // Optional: Draw "Min" and "Max" text next to it
+}
+
+make_range_indicator :: proc(min_v, max_v, current: f64, size: rl.Vector2) -> ^Component {
+    c := new(Component)
+
+    c.desired_size = size
+    c.min_size = size
+
+    c.variant = RangeIndicator{
+        min_val = min_v,
+        max_val = max_v,
+        current_val = current,
+        bar_color = rl.GRAY,
+        knob_color = rl.WHITE,
+        background_color = rl.DARKGRAY,
+    }
+    return c
+}
+
+range_indicator_set_data :: proc(component: ^Component, min_val, max_val, current_val: f64) {
+	if component == nil do return
+
+	if range_indicator, ok := &component.variant.(RangeIndicator); ok {
+		range_indicator.min_val = min_val
+        range_indicator.max_val = max_val
+        range_indicator.current_val = current_val
+	}
+}
 
 // --------- Compound components -----------
 
@@ -828,34 +861,36 @@ StockWindow :: struct {
 	status_texture_panels: [dynamic]^Component,
 	stock_price_labels: [dynamic]^Component,
 	stock_price_graphs: [dynamic]^Component,
+	stock_price_range_indicators: [dynamic]^Component,
 
 	stock_list_box: ^Component,
 
 	detail_root:    ^Component,
-    name_label:     ^Component,
-    rating_label:     ^Component,
-    price_label:    ^Component,
-    available_label:    ^Component,
-    owned_label:    ^Component,
-    profit_loss_pct_label:    ^Component,
-    cost_basis_label:    ^Component,
-    proceeds_label:    ^Component,
-    profit_loss_label:    ^Component,
-    buy_button:    ^Component,
-    sell_button:    ^Component,
-    buy_all_button:    ^Component,
-    buy_all_amount_label:    ^Component,
-    sell_all_button:    ^Component,
-    sell_all_profit_label:    ^Component,
+	name_label:     ^Component,
+	description_label:     ^Component,
+	rating_label:     ^Component,
+	price_label:    ^Component,
+	available_label:    ^Component,
+	owned_label:    ^Component,
+	profit_loss_pct_label:    ^Component,
+	cost_basis_label:    ^Component,
+	proceeds_label:    ^Component,
+	profit_loss_label:    ^Component,
+	buy_button:    ^Component,
+	sell_button:    ^Component,
+	buy_all_button:    ^Component,
+	buy_all_amount_label:    ^Component,
+	sell_all_button:    ^Component,
+	sell_all_profit_label:    ^Component,
 
-    DEBUG_earnings_per_share_label: ^Component,
-    DEBUG_sentiment_multiplier_label: ^Component,
-    DEBUG_volatility_label: ^Component,
-    DEBUG_momentum_equilibrium_label: ^Component,
-    DEBUG_momentum_label: ^Component,
-    DEBUG_growth_rate_label: ^Component,
-    DEBUG_credit_rating_label: ^Component,
-    DEBUG_payout_ratio_label: ^Component,
+	DEBUG_earnings_per_share_label: ^Component,
+	DEBUG_sentiment_multiplier_label: ^Component,
+	DEBUG_volatility_label: ^Component,
+	DEBUG_momentum_equilibrium_label: ^Component,
+	DEBUG_momentum_label: ^Component,
+	DEBUG_growth_rate_label: ^Component,
+	DEBUG_credit_rating_label: ^Component,
+	DEBUG_payout_ratio_label: ^Component,
 }
 
 make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
@@ -863,9 +898,9 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 
 	widget.company_list = make([dynamic]stocks.CompanyID)
 	for id, _ in market.companies {
-        append(&widget.company_list, id)
-    }
-    slice.sort(widget.company_list[:])
+		append(&widget.company_list, id)
+	}
+	slice.sort(widget.company_list[:])
 
 	widget.selected_id = -1
 
@@ -877,53 +912,60 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 	widget.status_texture_panels = make([dynamic]^Component)
 	widget.stock_price_labels = make([dynamic]^Component)
 	widget.stock_price_graphs = make([dynamic]^Component)
-    for id in widget.company_list {
-    	company := &market.companies[id]
-    	rating_label := make_label("-", global.font_small_italic, 18, rl.BLACK, .Right)
-    	status_texture_panel := make_texture_panel(textures.ui_textures[.Circle], {8.0, 8.0})
-    	status_texture_panel.state = .Hidden
-    	stock_price_label := make_label("-", global.font_small, 18, rl.BLACK, .Right)
-    	stock_price_graph := make_graph({90.0, 35.0})
+	widget.stock_price_range_indicators = make([dynamic]^Component)
+	for id in widget.company_list {
+		company := &market.companies[id]
+		rating_label := make_label("-", global.font_small_italic, 18, rl.BLACK, .Right)
+		status_texture_panel := make_texture_panel(textures.ui_textures[.Circle], {8.0, 8.0})
+		status_texture_panel.state = .Hidden
+		stock_price_label := make_label("-", global.font_small, 18, rl.BLACK, .Right)
+		stock_price_graph := make_graph({90.0, 35.0})
+		stock_price_range_indicator := make_range_indicator(0.0, 100.0, 50.0, {90.0, 6.0})
 		graph_set_point_size(stock_price_graph, 1.0)
-    	append(&widget.rating_labels, rating_label)
-    	append(&widget.status_texture_panels, status_texture_panel)
-    	append(&widget.stock_price_labels, stock_price_label)
-    	append(&widget.stock_price_graphs, stock_price_graph)
-        box_add_child(widget.stock_list_box,
-            make_simple_button(.OnRelease, rl.DARKGRAY, {},
-            	make_box(.Horizontal, .SpaceBetween, .Center, 12,
-            		make_box(.Horizontal, .Start, .Center, 12,
-            			make_pill(rl.GRAY, {60.0, 0.0},
-	            			make_label(fmt.tprintf("%s", company.ticker_symbol), global.font_small_italic, 18, rl.BLACK, .Center),
-	        			),
-	        			make_label(fmt.tprintf("%s", company.name), global.font, 24, rl.BLACK, .Left),
-	        			rating_label,
-        			),
-        			make_box(.Horizontal, .Start, .Center, 8,
-            			status_texture_panel,
-	        			stock_price_label,
-	        			stock_price_graph,
-        			),
-        		),
-        	),
-        )
-    }
+		append(&widget.rating_labels, rating_label)
+		append(&widget.status_texture_panels, status_texture_panel)
+		append(&widget.stock_price_labels, stock_price_label)
+		append(&widget.stock_price_graphs, stock_price_graph)
+		append(&widget.stock_price_range_indicators, stock_price_range_indicator)
+		box_add_child(widget.stock_list_box,
+			make_simple_button(.OnRelease, rl.DARKGRAY, {},
+				make_box(.Horizontal, .SpaceBetween, .Center, 12,
+					make_box(.Horizontal, .Start, .Center, 12,
+						make_pill(rl.GRAY, {60.0, 0.0},
+							make_label(fmt.tprintf("%s", company.ticker_symbol), global.font_small_italic, 18, rl.BLACK, .Center),
+						),
+						make_label(fmt.tprintf("%s", company.name), global.font, 24, rl.BLACK, .Left),
+						rating_label,
+					),
+					make_box(.Horizontal, .Start, .Center, 8,
+						status_texture_panel,
+						stock_price_label,
+						make_box(.Vertical, .Start, .Center, 2,
+							stock_price_graph,
+							stock_price_range_indicator,
+						),
+					),
+				),
+			),
+		)
+	}
 
-    widget.name_label  = make_label("-", global.font, 24, rl.BLACK)
-    widget.rating_label  = make_label("-", global.font_small_italic, 18, rl.BLACK)
-    widget.price_label = make_label("-", global.font_small, 18, rl.BLACK)
-    widget.available_label = make_label("-", global.font_small, 18, rl.BLACK)
-    widget.owned_label = make_label("-", global.font_small, 18, rl.BLACK)
-    widget.profit_loss_pct_label = make_label("-", global.font_small, 18, rl.BLACK)
-    widget.cost_basis_label = make_label("-", global.font_small, 18, rl.BLACK)
-    widget.proceeds_label = make_label("-", global.font_small, 18, rl.BLACK)
-    widget.profit_loss_label = make_label("-", global.font_small, 18, rl.BLACK)
+	widget.name_label  = make_label("-", global.font, 24, rl.BLACK)
+	widget.description_label  = make_label("-", global.font_small_italic, 18, rl.BLACK)
+	widget.rating_label  = make_label("-", global.font_small_italic, 18, rl.BLACK)
+	widget.price_label = make_label("-", global.font_small, 18, rl.BLACK)
+	widget.available_label = make_label("-", global.font_small, 18, rl.BLACK)
+	widget.owned_label = make_label("-", global.font_small, 18, rl.BLACK)
+	widget.profit_loss_pct_label = make_label("-", global.font_small, 18, rl.BLACK)
+	widget.cost_basis_label = make_label("-", global.font_small, 18, rl.BLACK)
+	widget.proceeds_label = make_label("-", global.font_small, 18, rl.BLACK)
+	widget.profit_loss_label = make_label("-", global.font_small, 18, rl.BLACK)
 
-    widget.buy_button = make_simple_button(.OnRelease, rl.GRAY, {100.0, 0.0},
-    	make_label("Buy 1", global.font, 24, rl.BLACK),
+	widget.buy_button = make_simple_button(.OnRelease, rl.GRAY, {100.0, 0.0},
+		make_label("Buy 1", global.font, 24, rl.BLACK),
 	)
 	widget.sell_button = make_simple_button(.OnRelease, rl.GRAY, {100.0, 0.0},
-    	make_label("Sell 1", global.font, 24, rl.BLACK),
+		make_label("Sell 1", global.font, 24, rl.BLACK),
 	)
 	widget.buy_all_amount_label = make_label("-", global.font_tiny, 14, rl.BLACK)
 	widget.buy_all_button = make_simple_button(.OnRelease, rl.GRAY, {100.0, 0.0},
@@ -931,71 +973,74 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 	)
 	widget.sell_all_profit_label = make_label("-", global.font_tiny, 14, rl.BLACK)
 	widget.sell_all_button = make_simple_button(.OnRelease, rl.GRAY, {100.0, 0.0},
-    	make_label("Sell all", global.font, 24, rl.BLACK),
+		make_label("Sell all", global.font, 24, rl.BLACK),
 	)
 
 	widget.DEBUG_earnings_per_share_label = make_label("-", global.font_small, 18, rl.BLACK)
-    widget.DEBUG_sentiment_multiplier_label = make_label("-", global.font_small, 18, rl.BLACK)
-    widget.DEBUG_volatility_label = make_label("-", global.font_small, 18, rl.BLACK)
-    widget.DEBUG_momentum_equilibrium_label = make_label("-", global.font_small, 18, rl.BLACK)
-    widget.DEBUG_momentum_label = make_label("-", global.font_small, 18, rl.BLACK)
-    widget.DEBUG_growth_rate_label = make_label("-", global.font_small, 18, rl.BLACK)
-    widget.DEBUG_credit_rating_label = make_label("-", global.font_small, 18, rl.BLACK)
-    widget.DEBUG_payout_ratio_label = make_label("-", global.font_small, 18, rl.BLACK)
+	widget.DEBUG_sentiment_multiplier_label = make_label("-", global.font_small, 18, rl.BLACK)
+	widget.DEBUG_volatility_label = make_label("-", global.font_small, 18, rl.BLACK)
+	widget.DEBUG_momentum_equilibrium_label = make_label("-", global.font_small, 18, rl.BLACK)
+	widget.DEBUG_momentum_label = make_label("-", global.font_small, 18, rl.BLACK)
+	widget.DEBUG_growth_rate_label = make_label("-", global.font_small, 18, rl.BLACK)
+	widget.DEBUG_credit_rating_label = make_label("-", global.font_small, 18, rl.BLACK)
+	widget.DEBUG_payout_ratio_label = make_label("-", global.font_small, 18, rl.BLACK)
 
-    widget.detail_root = make_panel(rl.DARKGRAY, {0, 200},
-        make_margin(8, 8, 8, 8,
-        	make_box(.Horizontal, .SpaceBetween, .Fill, 16,
-        		make_box(.Vertical, .Start, .Start, 10,
-		            make_box(.Horizontal, .Start, .Start, 8,
-	            		widget.name_label,
-	            		widget.rating_label,
-	            	),
-		            widget.price_label,
-	    	        widget.available_label,
-	    	        make_box(.Horizontal, .Start, .Fill, 8,
-	    	        	widget.owned_label,
-	    	        	widget.profit_loss_pct_label,
-		        	),
-		        	widget.cost_basis_label,
-		        	make_box(.Horizontal, .Start, .Fill, 8,
-	    	        	widget.proceeds_label,
-	    	        	widget.profit_loss_label,
-		        	),
-	    	        make_box(.Horizontal, .Start, .Fill, 8,
-	    	        	widget.buy_button,
-	    	        	widget.sell_button,
-		        	),
-		        	make_box(.Horizontal, .Start, .Fill, 8,
-	    	        	widget.buy_all_button,
-	    	        	widget.sell_all_button,
-		        	),
-	        	),
-	        	make_box(.Vertical, .Start, .Start, 10,
-		            widget.DEBUG_earnings_per_share_label,
-				    widget.DEBUG_sentiment_multiplier_label,
-				    widget.DEBUG_volatility_label,
-				    widget.DEBUG_momentum_equilibrium_label,
-				    widget.DEBUG_momentum_label,
-				    widget.DEBUG_growth_rate_label,
-				    widget.DEBUG_credit_rating_label,
-				    widget.DEBUG_payout_ratio_label,
-	        	),
-    		),
-    	),
-    )
-
-    stock_panel := make_anchor(.Center,
-        make_panel(base_color, {},
-    		make_margin(16, 16, 16, 16,
-    			make_box(.Vertical, .Start, .Fill, 10,
-	                make_label("Stock Market", global.font_large, 28, rl.WHITE),
-	                make_scroll_container({600.0, 400.0}, widget.stock_list_box),
-	                widget.detail_root,
-	            ),
+	widget.detail_root = make_panel(rl.DARKGRAY, {0, 200},
+		make_margin(8, 8, 8, 8,
+			make_box(.Horizontal, .SpaceBetween, .Fill, 16,
+				make_box(.Vertical, .Start, .Start, 10,
+					make_box(.Vertical, .Center, .Start, 0,
+						make_box(.Horizontal, .Start, .Start, 8,
+							widget.name_label,
+							widget.rating_label,
+						),
+						widget.description_label,
+					),
+					widget.price_label,
+					widget.available_label,
+					make_box(.Horizontal, .Start, .Fill, 8,
+						widget.owned_label,
+						widget.profit_loss_pct_label,
+					),
+					widget.cost_basis_label,
+					make_box(.Horizontal, .Start, .Fill, 8,
+						widget.proceeds_label,
+						widget.profit_loss_label,
+					),
+					make_box(.Horizontal, .Start, .Fill, 8,
+						widget.buy_button,
+						widget.sell_button,
+					),
+					make_box(.Horizontal, .Start, .Fill, 8,
+						widget.buy_all_button,
+						widget.sell_all_button,
+					),
+				),
+				make_box(.Vertical, .Start, .Start, 0,
+					widget.DEBUG_earnings_per_share_label,
+					widget.DEBUG_sentiment_multiplier_label,
+					widget.DEBUG_volatility_label,
+					widget.DEBUG_momentum_equilibrium_label,
+					widget.DEBUG_momentum_label,
+					widget.DEBUG_growth_rate_label,
+					widget.DEBUG_credit_rating_label,
+					widget.DEBUG_payout_ratio_label,
+				),
 			),
-    	),
-    )
+		),
+	)
+
+	stock_panel := make_anchor(.Center,
+		make_panel(base_color, {},
+			make_margin(16, 16, 16, 16,
+				make_box(.Vertical, .Start, .Fill, 10,
+					make_label("Stock Market", global.font_large, 28, rl.WHITE),
+					make_scroll_container({600.0, 400.0}, widget.stock_list_box),
+					widget.detail_root,
+				),
+			),
+		),
+	)
 
 	widget.root = stock_panel
 
@@ -1008,22 +1053,26 @@ update_stock_window :: proc(window: ^StockWindow, market: ^stocks.Market, portfo
 		stock_info := &portfolio.stocks[id]
 
 		rating := stocks.score_to_rating(company.credit_rating)
-        label, _, color := stocks.get_rating_data(rating)
-        label_set_color(window.rating_labels[i], color)
+		label, _, color := stocks.get_rating_data(rating)
+		label_set_color(window.rating_labels[i], color)
 		label_set_text(window.rating_labels[i], label)
 		
 		if stock_info.quantity_owned > 0 {
 			window.status_texture_panels[i].state = .Active
 			unrealized_profit_loss_pct := ((company.current_price / stock_info.average_cost) - 1.0) * 100.0
 			if global.is_approx_zero(unrealized_profit_loss_pct) {
-    			texture_panel_set_tint_color(window.status_texture_panels[i], rl.WHITE)
-    		} else if unrealized_profit_loss_pct < -5.0 {
-    			texture_panel_set_tint_color(window.status_texture_panels[i], rl.RED)
-    		} else if unrealized_profit_loss_pct > 5.0 {
-    			texture_panel_set_tint_color(window.status_texture_panels[i], rl.GREEN)
-    		} else {
-    			texture_panel_set_tint_color(window.status_texture_panels[i], rl.YELLOW)
-    		}
+				texture_panel_set_tint_color(window.status_texture_panels[i], rl.WHITE)
+			} else if unrealized_profit_loss_pct < 0.0 {
+				texture_panel_set_tint_color(window.status_texture_panels[i], rl.RED)
+			} else if unrealized_profit_loss_pct > 0.0 {
+				texture_panel_set_tint_color(window.status_texture_panels[i], rl.GREEN)
+			}
+
+			if abs(unrealized_profit_loss_pct) >= 5.0 {
+				window.status_texture_panels[i].min_size = {10.0, 10.0}
+			} else {
+				window.status_texture_panels[i].min_size = {8.0, 8.0}
+			}
 		} else {
 			window.status_texture_panels[i].state = .Hidden
 		}
@@ -1032,107 +1081,118 @@ update_stock_window :: proc(window: ^StockWindow, market: ^stocks.Market, portfo
 
 		min_val, max_val := math.F64_MAX, math.F64_MIN
 		for &price in company.price_history {
-	        min_val = min(min_val, price)
-	        max_val = max(max_val, price)
-	    }
+			min_val = min(min_val, price)
+			max_val = max(max_val, price)
+		}
 
-	    range := max_val - min_val
+		range := max_val - min_val
 
-	    get_price_from_history :: proc(data: rawptr, index: int) -> f32 {
-	        stats_arr := cast(^[dynamic]f64)data
+		min_visual_range := company.current_price * 0.02 
+		if range < min_visual_range {
+			center := (max_val + min_val) * 0.5
+			min_val = center - (min_visual_range * 0.5)
+			max_val = center + (min_visual_range * 0.5)
+			range = max_val - min_val
+		}
 
-	        if index >= len(stats_arr) do return 0
+		get_price_from_history :: proc(data: rawptr, index: int) -> f32 {
+			stats_arr := cast(^[dynamic]f64)data
 
-	        return f32(stats_arr[index])
-	    }
+			if index >= len(stats_arr) do return 0
+
+			return f32(stats_arr[index])
+		}
 
 		graph_set_data(
-	        window.stock_price_graphs[i],
-	        &company.price_history,
-	        len(company.price_history),
-	        get_price_from_history,
-	        f32(min_val - range * 0.1),
-	        f32(max_val + range * 0.1),
-        )
+			window.stock_price_graphs[i],
+			&company.price_history,
+			len(company.price_history),
+			get_price_from_history,
+			f32(min_val - range * 0.1),
+			f32(max_val + range * 0.1),
+		)
+
+		range_indicator_set_data(window.stock_price_range_indicators[i], company.all_time_low, company.all_time_high, company.current_price)
 	}
 
-    if company, ok := &market.companies[window.selected_id]; ok {
-        window.detail_root.state = .Active
+	if company, ok := &market.companies[window.selected_id]; ok {
+		window.detail_root.state = .Active
 
-        stock_info := &portfolio.stocks[window.selected_id]
-        available_stocks := stocks.get_available_shares(company, stock_info)
+		stock_info := &portfolio.stocks[window.selected_id]
+		available_stocks := stocks.get_available_shares(company, stock_info)
 
-        label_set_text(window.name_label, company.name)
+		label_set_text(window.name_label, company.name)
+		label_set_text(window.description_label, company.description)
 
-        rating := stocks.score_to_rating(company.credit_rating)
-        label, _, color := stocks.get_rating_data(rating)
+		rating := stocks.score_to_rating(company.credit_rating)
+		label, _, color := stocks.get_rating_data(rating)
 
-        label_set_color(window.rating_label, color)
-        label_set_text(window.rating_label, label)
-        label_set_text(window.price_label, fmt.tprintf("$%.2f per share", company.current_price))
-        label_set_text(window.available_label, fmt.tprintf("%s shares available", global.format_int_thousands(available_stocks)))
-        if stock_info.quantity_owned > 0 {
-        	window.profit_loss_pct_label.state = .Active
-        	window.cost_basis_label.state = .Active
-        	window.proceeds_label.state = .Active
-        	window.profit_loss_label.state = .Active
-        	label_set_text(window.owned_label,
-        		fmt.tprintf(
-        			"You own %s shares @ %s",
-        			global.format_int_thousands(stock_info.quantity_owned),
-        			global.format_float_thousands(stock_info.average_cost, 2),
-    			),
-    		)
-    		unrealized_profit_loss_pct := ((company.current_price / stock_info.average_cost) - 1.0) * 100.0
-    		if global.is_approx_zero(unrealized_profit_loss_pct) {
-    			label_set_color(window.profit_loss_pct_label, rl.BLACK)
-    			label_set_text(window.profit_loss_pct_label, "[0.00 %]")
-    		} else if unrealized_profit_loss_pct < 0.0 {
-    			label_set_color(window.profit_loss_pct_label, rl.RED)
-    			label_set_text(window.profit_loss_pct_label, fmt.tprintf("[%s %%]", global.format_float_thousands(unrealized_profit_loss_pct, 2)))
-    		} else if unrealized_profit_loss_pct > 0.0 {
-    			label_set_color(window.profit_loss_pct_label, rl.GREEN)
-    			label_set_text(window.profit_loss_pct_label, fmt.tprintf("[+%s %%]", global.format_float_thousands(unrealized_profit_loss_pct, 2)))
-    		}
+		label_set_color(window.rating_label, color)
+		label_set_text(window.rating_label, label)
+		label_set_text(window.price_label, fmt.tprintf("$%.2f per share", company.current_price))
+		label_set_text(window.available_label, fmt.tprintf("%s shares available", global.format_int_thousands(available_stocks)))
+		if stock_info.quantity_owned > 0 {
+			window.profit_loss_pct_label.state = .Active
+			window.cost_basis_label.state = .Active
+			window.proceeds_label.state = .Active
+			window.profit_loss_label.state = .Active
+			label_set_text(window.owned_label,
+				fmt.tprintf(
+					"You own %s shares @ %s",
+					global.format_int_thousands(stock_info.quantity_owned),
+					global.format_float_thousands(stock_info.average_cost, 2),
+				),
+			)
+			unrealized_profit_loss_pct := ((company.current_price / stock_info.average_cost) - 1.0) * 100.0
+			if global.is_approx_zero(unrealized_profit_loss_pct) {
+				label_set_color(window.profit_loss_pct_label, rl.BLACK)
+				label_set_text(window.profit_loss_pct_label, "[0.00 %]")
+			} else if unrealized_profit_loss_pct < 0.0 {
+				label_set_color(window.profit_loss_pct_label, rl.RED)
+				label_set_text(window.profit_loss_pct_label, fmt.tprintf("[%s %%]", global.format_float_thousands(unrealized_profit_loss_pct, 2)))
+			} else if unrealized_profit_loss_pct > 0.0 {
+				label_set_color(window.profit_loss_pct_label, rl.GREEN)
+				label_set_text(window.profit_loss_pct_label, fmt.tprintf("[+%s %%]", global.format_float_thousands(unrealized_profit_loss_pct, 2)))
+			}
 
-    		cost_basis := f64(stock_info.quantity_owned) * stock_info.average_cost
-    		proceeds := f64(stock_info.quantity_owned) * company.current_price
+			cost_basis := f64(stock_info.quantity_owned) * stock_info.average_cost
+			proceeds := f64(stock_info.quantity_owned) * company.current_price
 
-    		label_set_text(window.cost_basis_label, fmt.tprintf("Cost basis: $%s", global.format_float_thousands(cost_basis, 2)))
-    		label_set_text(window.proceeds_label, fmt.tprintf("Proceeds: $%s", global.format_float_thousands(proceeds, 2)))
+			label_set_text(window.cost_basis_label, fmt.tprintf("Cost basis: $%s", global.format_float_thousands(cost_basis, 2)))
+			label_set_text(window.proceeds_label, fmt.tprintf("Proceeds: $%s", global.format_float_thousands(proceeds, 2)))
 
-    		unrealized_profit_loss := proceeds - cost_basis
-    		if global.is_approx_zero(unrealized_profit_loss) {
-    			label_set_color(window.profit_loss_label, rl.BLACK)
-    			label_set_text(window.profit_loss_label, "[$0.00]")
-    		} else if unrealized_profit_loss < 0.0 {
-    			label_set_color(window.profit_loss_label, rl.RED)
-    			label_set_text(window.profit_loss_label, fmt.tprintf("[$%s]", global.format_float_thousands(unrealized_profit_loss, 2)))
-    		} else if unrealized_profit_loss > 0.0 {
-    			label_set_color(window.profit_loss_label, rl.GREEN)
-    			label_set_text(window.profit_loss_label, fmt.tprintf("[$+%s]", global.format_float_thousands(unrealized_profit_loss, 2)))
-    		}
-        } else {
-        	label_set_text(window.owned_label, "You own no shares")
-        	window.profit_loss_pct_label.state = .Inactive
-        	window.cost_basis_label.state = .Inactive
-        	window.proceeds_label.state = .Inactive
-        	window.profit_loss_label.state = .Inactive
-        }
+			unrealized_profit_loss := proceeds - cost_basis
+			if global.is_approx_zero(unrealized_profit_loss) {
+				label_set_color(window.profit_loss_label, rl.BLACK)
+				label_set_text(window.profit_loss_label, "[$0.00]")
+			} else if unrealized_profit_loss < 0.0 {
+				label_set_color(window.profit_loss_label, rl.RED)
+				label_set_text(window.profit_loss_label, fmt.tprintf("[$%s]", global.format_float_thousands(unrealized_profit_loss, 2)))
+			} else if unrealized_profit_loss > 0.0 {
+				label_set_color(window.profit_loss_label, rl.GREEN)
+				label_set_text(window.profit_loss_label, fmt.tprintf("[$+%s]", global.format_float_thousands(unrealized_profit_loss, 2)))
+			}
+		} else {
+			label_set_text(window.owned_label, "You own no shares")
+			window.profit_loss_pct_label.state = .Inactive
+			window.cost_basis_label.state = .Inactive
+			window.proceeds_label.state = .Inactive
+			window.profit_loss_label.state = .Inactive
+		}
 
 
-        label_set_text(window.DEBUG_earnings_per_share_label, fmt.tprintf("DEBUG EPS: %f", company.earnings_per_share))
-	    label_set_text(window.DEBUG_sentiment_multiplier_label, fmt.tprintf("DEBUG Sentiment: %f", company.sentiment_multiplier))
+		label_set_text(window.DEBUG_earnings_per_share_label, fmt.tprintf("DEBUG EPS: %f", company.earnings_per_share))
+		label_set_text(window.DEBUG_sentiment_multiplier_label, fmt.tprintf("DEBUG Sentiment: %f", company.sentiment_multiplier))
 		label_set_text(window.DEBUG_volatility_label, fmt.tprintf("DEBUG volatility: %f", company.volatility))
 		label_set_text(window.DEBUG_momentum_equilibrium_label, fmt.tprintf("DEBUG momentum equi: %f", company.momentum_equilibrium))
 		label_set_text(window.DEBUG_momentum_label, fmt.tprintf("DEBUG momentum: %f", company.momentum))
-	    label_set_text(window.DEBUG_growth_rate_label, fmt.tprintf("DEBUG growth rate: %f", company.growth_rate))
-	    label_set_text(window.DEBUG_credit_rating_label, fmt.tprintf("DEBUG credit rating: %d", company.credit_rating))
-	    label_set_text(window.DEBUG_payout_ratio_label, fmt.tprintf("DEBUG payout ratio: %f", company.payout_ratio))
+		label_set_text(window.DEBUG_growth_rate_label, fmt.tprintf("DEBUG growth rate: %f", company.growth_rate))
+		label_set_text(window.DEBUG_credit_rating_label, fmt.tprintf("DEBUG credit rating: %d", company.credit_rating))
+		label_set_text(window.DEBUG_payout_ratio_label, fmt.tprintf("DEBUG payout ratio: %f", company.payout_ratio))
 
-    } else {
-        window.detail_root.state = .Hidden
-    }
+	} else {
+		window.detail_root.state = .Hidden
+	}
 }
 
 // -----------------------------------------
@@ -1159,43 +1219,43 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 		desired_size = get_desired_size(v.child)
 	case BoxContainer:
 		visible_children := 0
-        for child in v.children {
-            if child == nil || child.state == .Inactive do continue
-            visible_children += 1
-        }
+		for child in v.children {
+			if child == nil || child.state == .Inactive do continue
+			visible_children += 1
+		}
 
-        if visible_children > 0 {
-            processed_children := 0
-            for child in v.children {
-                if child == nil || child.state == .Inactive do continue
-                
-                child_desired_size := get_desired_size(child)
-                
-                if v.direction == .Vertical {
-                    desired_size.x = max(desired_size.x, child_desired_size.x)
-                    desired_size.y += child_desired_size.y
-                    
-                    if processed_children < visible_children - 1 {
-                        desired_size.y += f32(v.gap)
-                    }
-                } else {
-                    desired_size.x += child_desired_size.x
-                    if processed_children < visible_children - 1 {
-                        desired_size.x += f32(v.gap)
-                    }
-                    desired_size.y = max(desired_size.y, child_desired_size.y)
-                }
-                processed_children += 1
-            }
-        }
+		if visible_children > 0 {
+			processed_children := 0
+			for child in v.children {
+				if child == nil || child.state == .Inactive do continue
+				
+				child_desired_size := get_desired_size(child)
+				
+				if v.direction == .Vertical {
+					desired_size.x = max(desired_size.x, child_desired_size.x)
+					desired_size.y += child_desired_size.y
+					
+					if processed_children < visible_children - 1 {
+						desired_size.y += f32(v.gap)
+					}
+				} else {
+					desired_size.x += child_desired_size.x
+					if processed_children < visible_children - 1 {
+						desired_size.x += f32(v.gap)
+					}
+					desired_size.y = max(desired_size.y, child_desired_size.y)
+				}
+				processed_children += 1
+			}
+		}
 	case MarginContainer:
 		desired_size = get_desired_size(v.child)
 		desired_size.x += f32(v.margin_left + v.margin_right)
 		desired_size.y += f32(v.margin_top + v.margin_bottom)
 	case ScrollContainer:
 		if v.child != nil {
-            _ = get_desired_size(v.child)
-        }
+			_ = get_desired_size(v.child)
+		}
 		desired_size = component.min_size
 	case Panel:
 		desired_size = get_desired_size(v.child)
@@ -1220,6 +1280,8 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 	case Graph:
 		desired_size = get_desired_size(v.child)
 		desired_size = {max(component.min_size.x, desired_size.x), max(component.min_size.y, desired_size.y)}
+	case RangeIndicator:
+		desired_size = component.min_size
 	}
 
 	component.desired_size = desired_size
@@ -1411,20 +1473,20 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 
 	case ScrollContainer:
 		if v.child != nil {
-            v.viewport_height = actual_rect.height
-            v.content_height  = v.child.desired_size.y
-            v.scrollable_range = max(0.0, v.content_height - v.viewport_height)
+			v.viewport_height = actual_rect.height
+			v.content_height  = v.child.desired_size.y
+			v.scrollable_range = max(0.0, v.content_height - v.viewport_height)
 
-            v.scroll_y = math.clamp(v.scroll_y, 0.0, v.scrollable_range)
+			v.scroll_y = math.clamp(v.scroll_y, 0.0, v.scrollable_range)
 
-            child_full_rect := rl.Rectangle{
-                actual_rect.x,
-                actual_rect.y - v.scroll_y,
-                actual_rect.width - (v.content_height > v.viewport_height ? 16.0 : 0.0),
-                v.child.desired_size.y,
-            }
-            arrange_components(v.child, child_full_rect)
-        }
+			child_full_rect := rl.Rectangle{
+				actual_rect.x,
+				actual_rect.y - v.scroll_y,
+				actual_rect.width - (v.content_height > v.viewport_height ? 16.0 : 0.0),
+				v.child.desired_size.y,
+			}
+			arrange_components(v.child, child_full_rect)
+		}
 
 	case Panel:
 		if v.child != nil {
@@ -1450,17 +1512,17 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 	case SimpleButton:
 		if v.child != nil {
 			padding_x := v.padding * 2
-            padding_y := v.padding * 2
+			padding_y := v.padding * 2
 
 			safe_width  := max(0.0, actual_rect.width - padding_x)
-            safe_height := max(0.0, actual_rect.height - padding_y)
+			safe_height := max(0.0, actual_rect.height - padding_y)
 
 			child_rect := rl.Rectangle{
-                x      = actual_rect.x + v.padding,
-                y      = actual_rect.y + v.padding,
-                width  = safe_width,
-                height = safe_height,
-            }
+				x      = actual_rect.x + v.padding,
+				y      = actual_rect.y + v.padding,
+				width  = safe_width,
+				height = safe_height,
+			}
 
 			arrange_components(v.child, child_rect)
 		}
@@ -1470,7 +1532,7 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 			arrange_components(v.child, actual_rect)
 		}
 
-	case Label, LoadingBar, RadioButton, CheckBox:
+	case Label, LoadingBar, RadioButton, CheckBox, RangeIndicator:
 	}
 }
 
@@ -1513,44 +1575,44 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 			input_data.mouse_position = {-99999, -99999}
 		}
 
-	    if v.child != nil {
-	        if handle_input_recursive(v.child, input_data) do captured = true
-	    }
+		if v.child != nil {
+			if handle_input_recursive(v.child, input_data) do captured = true
+		}
 
-	    input_data.mouse_position = real_mouse_pos
+		input_data.mouse_position = real_mouse_pos
 
-	    if is_hovered {
-	        if v.scrollable_range > 0.0 && input_data.mouse_wheel_movement != 0.0 {
-	        	captured = true
-	            scroll_delta := input_data.mouse_wheel_movement * 20.0
-	            v.scroll_y = math.clamp(v.scroll_y - scroll_delta, 0.0, v.scrollable_range)
-	        }
-	    }
+		if is_hovered {
+			if v.scrollable_range > 0.0 && input_data.mouse_wheel_movement != 0.0 {
+				captured = true
+				scroll_delta := input_data.mouse_wheel_movement * 20.0
+				v.scroll_y = math.clamp(v.scroll_y - scroll_delta, 0.0, v.scrollable_range)
+			}
+		}
 
-	    if v.scrollable_range > 0.0 {
-	    	scroll_bar_rect := rl.Rectangle{
-	    		component.position.x + component.size.x - 16.0,
-	    		component.position.y,
-	    		16.0,
-	    		component.size.y,
-	    	}
-	    	scroll_bar_is_hovered := rl.CheckCollisionPointRec(mouse_pos, scroll_bar_rect)
-	    	if scroll_bar_is_hovered {
-	    		captured = true
-	    		if input.is_mouse_button_pressed_this_frame(.LEFT, input_data) {
-    				v.scroll_bar_dragging = true
-	    		}
-	    	}
+		if v.scrollable_range > 0.0 {
+			scroll_bar_rect := rl.Rectangle{
+				component.position.x + component.size.x - 16.0,
+				component.position.y,
+				16.0,
+				component.size.y,
+			}
+			scroll_bar_is_hovered := rl.CheckCollisionPointRec(mouse_pos, scroll_bar_rect)
+			if scroll_bar_is_hovered {
+				captured = true
+				if input.is_mouse_button_pressed_this_frame(.LEFT, input_data) {
+					v.scroll_bar_dragging = true
+				}
+			}
 
-	    	if !input.is_mouse_button_held_down(.LEFT, input_data) {
-    			v.scroll_bar_dragging = false
-    		}
+			if !input.is_mouse_button_held_down(.LEFT, input_data) {
+				v.scroll_bar_dragging = false
+			}
 
-    		if v.scroll_bar_dragging {
-    			vertical_position_normalized := clamp((input_data.mouse_position.y - component.position.y) / v.viewport_height, 0.0, 1.0)
-    			v.scroll_y = v.scrollable_range * vertical_position_normalized
-    		}
-	    }
+			if v.scroll_bar_dragging {
+				vertical_position_normalized := clamp((input_data.mouse_position.y - component.position.y) / v.viewport_height, 0.0, 1.0)
+				v.scroll_y = v.scrollable_range * vertical_position_normalized
+			}
+		}
 
 	case Panel:
 		captured = rl.CheckCollisionPointRec(mouse_pos, rect)
@@ -1652,7 +1714,7 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 			}
 		}
 
-	case Label, LoadingBar:
+	case Label, LoadingBar, RangeIndicator:
 		captured = rl.CheckCollisionPointRec(mouse_pos, rect)
 
 	case Graph:
@@ -1687,18 +1749,18 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 				rl.DrawCircleV({component.position.x + component.size.x - 7.0, component.position.y + 7.0}, 7.0, rl.DARKGRAY)
 				rl.DrawCircleV({component.position.x + component.size.x - 7.0, component.position.y + component.size.y - 7.0}, 7.0, rl.DARKGRAY)
 
-		        rl.DrawRectangleV(
-		        	{component.position.x + component.size.x - 14.0, component.position.y + 7.0},
-		        	{14.0, component.size.y - 14.0},
-		        	rl.DARKGRAY,
-	        	)
+				rl.DrawRectangleV(
+					{component.position.x + component.size.x - 14.0, component.position.y + 7.0},
+					{14.0, component.size.y - 14.0},
+					rl.DARKGRAY,
+				)
 
 				total_content_height := v.viewport_height + v.scrollable_range
 
 				knob_length_raw : f32 = 0.0
 				if total_content_height > 0 {
-				    visible_ratio := v.viewport_height / total_content_height
-				    knob_length_raw = v.viewport_height * visible_ratio
+					visible_ratio := v.viewport_height / total_content_height
+					knob_length_raw = v.viewport_height * visible_ratio
 				}
 
 				scroll_knob_length := clamp(knob_length_raw, 30.0, v.viewport_height)
@@ -1707,7 +1769,7 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 
 				scroll_progress : f32 = 0.0
 				if v.scrollable_range > 0 {
-				    scroll_progress = v.scroll_y / v.scrollable_range
+					scroll_progress = v.scroll_y / v.scrollable_range
 				}
 
 				scroll_knob_start := track_space_available * scroll_progress
@@ -1716,34 +1778,34 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 				scroll_bar_color := v.scroll_bar_dragging ? rl.WHITE : rl.RAYWHITE
 
 				rl.DrawCircleV(
-				    {component.position.x + component.size.x - 7.0, component.position.y + scroll_knob_start + 7.0}, 
-				    7.0, 
-				    scroll_bar_color,
+					{component.position.x + component.size.x - 7.0, component.position.y + scroll_knob_start + 7.0}, 
+					7.0, 
+					scroll_bar_color,
 				)
 
 				rl.DrawCircleV(
-				    {component.position.x + component.size.x - 7.0, component.position.y + scroll_knob_end - 7.0}, 
-				    7.0, 
-				    scroll_bar_color,
+					{component.position.x + component.size.x - 7.0, component.position.y + scroll_knob_end - 7.0}, 
+					7.0, 
+					scroll_bar_color,
 				)
 
 				rl.DrawRectangleV(
-				    {component.position.x + component.size.x - 14.0, component.position.y + scroll_knob_start + 7.0}, 
-				    {14.0, scroll_knob_length - 14.0}, 
-				    scroll_bar_color,
+					{component.position.x + component.size.x - 14.0, component.position.y + scroll_knob_start + 7.0}, 
+					{14.0, scroll_knob_length - 14.0}, 
+					scroll_bar_color,
 				)
 			}
 
-	        rl.BeginScissorMode(
-	            i32(component.position.x),
-	            i32(component.position.y),
-	            i32(component.size.x),
-	            i32(component.size.y),
-	        )
-	        draw_components_recursive(v.child, debug)
+			rl.BeginScissorMode(
+				i32(component.position.x),
+				i32(component.position.y),
+				i32(component.size.x),
+				i32(component.size.y),
+			)
+			draw_components_recursive(v.child, debug)
 
-	        rl.EndScissorMode()
-	    }
+			rl.EndScissorMode()
+		}
 	case Panel:
 		rl.DrawRectangleV(component.position, component.size, v.color)
 		draw_components_recursive(v.child, debug)
@@ -1867,17 +1929,18 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 
 		#partial switch v.alignment {
 		case .Top, .Center, .Bottom:
-			 pos.x += (component.size.x - text_dims.x) * 0.5
+			pos.x += (component.size.x - text_dims.x) * 0.5
 		case .TopRight, .Right, .BottomRight:
-			 pos.x += (component.size.x - text_dims.x)
+			pos.x += (component.size.x - text_dims.x)
 		case:
 		}
 
 		#partial switch v.alignment {
 		case .Left, .Center, .Right:
-			 pos.y += (component.size.y - text_dims.y) * 0.5
+			pos.y += (component.size.y - text_dims.y) * 0.5
+			pos.y += v.font_size * 0.1
 		case .BottomLeft, .Bottom, .BottomRight:
-			 pos.y += (component.size.y - text_dims.y)
+			pos.y += (component.size.y - text_dims.y)
 		case:
 		}
 
@@ -1928,6 +1991,15 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 			}
 		}
 		draw_components_recursive(v.child, debug)
+	case RangeIndicator:
+		rl.DrawRectangleGradientH(i32(component.position.x), i32(component.position.y), i32(component.size.x), i32(component.size.y), rl.RED, rl.GREEN)
+
+		range := v.max_val - v.min_val
+
+		if range > 0.0 {
+			t := f32(clamp((v.current_val - v.min_val) / range, 0.0, 1.0) )
+			rl.DrawCircleV(component.position + {t * component.size.x, component.size.y * 0.5}, component.size.y * 0.5, rl.BLACK)
+		}
 	}
 
 	if debug {
@@ -1985,6 +2057,8 @@ destroy_components_recursive :: proc(component: ^Component) {
 	case Graph:
 		destroy_components_recursive(v.child)
 		//fmt.println("Freeing Graph!")
+	case RangeIndicator:
+		//fmt.println("Freeing RangeIndicator!")
 	}
 	free(component)
 }

@@ -152,6 +152,9 @@ create_company :: proc(
 
 	start_price := (base_val_init + spec_val_init) * actual_sentiment_multiplier
 
+	low_price_noise := rand.float64() * 0.2
+	high_price_noise := rand.float64() * 0.2
+
 	return Company{
 		id = id,
 		name = name,
@@ -160,8 +163,8 @@ create_company :: proc(
 		sector = sector,
 		current_price = start_price,
 		expected_price = start_price,
-		all_time_low = start_price,
-		all_time_high = start_price,
+		all_time_low = start_price * (1.0 - low_price_noise),
+		all_time_high = start_price * (1.0 + high_price_noise),
 		price_history = make([dynamic]f64),
 		shares_outstanding = shares_outstanding,
 		float_percentage = float_percentage,
