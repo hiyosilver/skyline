@@ -150,6 +150,9 @@ main :: proc() {
     game_state.tick_stats_buffer = make([dynamic]TickStatistics)
     game_state.tick_stats_buffer_size = 30
     game_state.market = stocks.create_market()
+    for _ in 0..<30 {
+        stocks.update_market_tick(&game_state.market)
+    }
     game_state.stock_portfolio = stocks.create_stock_portfolio(&game_state.market)
 
     exe_path = os.args[0]
@@ -295,7 +298,7 @@ main :: proc() {
         ),
     )
 
-    graph = ui.make_graph({250.0, 150.0})
+    graph = ui.make_graph({250.0, 150.0}, true)
 
     money_radio_button = ui.make_radio_button(selected = true)
     illegitimate_money_radio_button = ui.make_radio_button()
@@ -461,6 +464,16 @@ handle_stock_window_interactions :: proc() {
 
     if ui.button_was_clicked(stock_window.sell_button) {
         stocks.execute_sell_order(&game_state.market, &game_state.stock_portfolio, &game_state.money, &game_state.period_income, stock_window.selected_id, 1)
+    }
+
+    if ui.button_was_clicked(stock_window.buy_all_button) {
+        number_to_buy := int(game_state.money / game_state.market.companies[stock_window.selected_id].current_price)
+        stocks.execute_buy_order(&game_state.market, &game_state.stock_portfolio, &game_state.money, stock_window.selected_id, number_to_buy)
+    }
+
+    if ui.button_was_clicked(stock_window.sell_all_button) {
+        stock_info := &game_state.stock_portfolio.stocks[stock_window.selected_id]
+        stocks.execute_sell_order(&game_state.market, &game_state.stock_portfolio, &game_state.money, &game_state.period_income, stock_window.selected_id, stock_info.quantity_owned)
     }
 }
 
@@ -748,12 +761,13 @@ calculate_period_end :: proc(tick_stats: ^TickStatistics) {
     //Calculate and pay salaries
     salaries, salaries_illegitimate: f64
     #reverse for &entry, i in crew_member_entries {
+        quit := false
         if game_state.money >= entry.crew_member.base_salary {
             game_state.money -= entry.crew_member.base_salary
             salaries += entry.crew_member.base_salary
         } else {
             game_state.money = 0.0
-            remove_crew_member(i)
+            quit = true
         }
         
         if game_state.illegitimate_money >= entry.crew_member.base_salary_illegitimate {
@@ -761,8 +775,10 @@ calculate_period_end :: proc(tick_stats: ^TickStatistics) {
             salaries_illegitimate += entry.crew_member.base_salary_illegitimate
         } else {
             game_state.illegitimate_money = 0.0
-            remove_crew_member(i)
+            quit = true
         }
+
+        if quit do remove_crew_member(i)
     }
 
     tick_stats.salaries = salaries

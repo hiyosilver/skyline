@@ -12,7 +12,7 @@ approx_equal :: proc(a, b: $T) -> bool where intrinsics.type_is_float(T) {
 	} else {
 		epsilon = 1e-9
 	}
-    return math.abs(a - b) < epsilon
+	return math.abs(a - b) < epsilon
 }
 
 is_approx_zero :: proc(x: $T) -> bool where intrinsics.type_is_float(T) {
@@ -22,7 +22,7 @@ is_approx_zero :: proc(x: $T) -> bool where intrinsics.type_is_float(T) {
 	} else {
 		epsilon = 1e-9
 	}
-    return math.abs(x) < epsilon
+	return math.abs(x) < epsilon
 }
 
 /*

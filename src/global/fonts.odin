@@ -10,9 +10,11 @@ font_large: rl.Font
 font_large_italic: rl.Font
 font_small: rl.Font
 font_small_italic: rl.Font
+font_tiny: rl.Font
+font_tiny_italic: rl.Font
 
 load_fonts :: proc(asset_dir: string) {
-    symbols := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!?()[]%/$₴@~,;.:'+-↗→↘◆◇▶▷"
+    symbols := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!?()[]%/$₴@&~,;.:'+-↗→↘◆◇▶▷"
     runes_array := utf8.string_to_runes(symbols)
     rune_count := utf8.rune_count_in_string(symbols)
     defer delete(runes_array)
@@ -28,6 +30,9 @@ load_fonts :: proc(asset_dir: string) {
     font_file_path = fmt.caprintf("%s/fonts/vollkorn/Vollkorn-VariableFont_wght.ttf", asset_dir)
     font_small = rl.LoadFontEx(font_file_path, 18, raw, i32(rune_count))
     delete(font_file_path)
+    font_file_path = fmt.caprintf("%s/fonts/vollkorn/Vollkorn-VariableFont_wght.ttf", asset_dir)
+    font_tiny = rl.LoadFontEx(font_file_path, 14, raw, i32(rune_count))
+    delete(font_file_path)
     font_file_path = fmt.caprintf("%s/fonts/vollkorn/Vollkorn-Italic-VariableFont_wght.ttf", asset_dir)
     font_italic = rl.LoadFontEx(font_file_path, 24, raw, i32(rune_count))
     delete(font_file_path)
@@ -37,10 +42,19 @@ load_fonts :: proc(asset_dir: string) {
     font_file_path = fmt.caprintf("%s/fonts/vollkorn/Vollkorn-Italic-VariableFont_wght.ttf", asset_dir)
     font_small_italic = rl.LoadFontEx(font_file_path, 18, raw, i32(rune_count))
     delete(font_file_path)
+    font_file_path = fmt.caprintf("%s/fonts/vollkorn/Vollkorn-Italic-VariableFont_wght.ttf", asset_dir)
+    font_tiny_italic = rl.LoadFontEx(font_file_path, 14, raw, i32(rune_count))
+    delete(font_file_path)
 }
 
 @(fini)
 unload_fonts :: proc() {
 	rl.UnloadFont(font)
 	rl.UnloadFont(font_italic)
+    rl.UnloadFont(font_large)
+    rl.UnloadFont(font_large_italic)
+    rl.UnloadFont(font_small)
+    rl.UnloadFont(font_small_italic)
+    rl.UnloadFont(font_tiny)
+    rl.UnloadFont(font_tiny_italic)
 }
