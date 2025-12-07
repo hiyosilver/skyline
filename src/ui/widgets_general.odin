@@ -1,7 +1,7 @@
 package ui
 
-import rl "vendor:raylib"
 import "core:strings"
+import rl "vendor:raylib"
 
 Panel :: struct {
 	child: ^Component,
@@ -14,30 +14,35 @@ make_panel :: proc(color: rl.Color, min_size: rl.Vector2, child: ^Component = ni
 	c.size = min_size
 	c.min_size = min_size
 
-	c.variant = Panel{
-		color    = color,
-		child    = child,
+	c.variant = Panel {
+		color = color,
+		child = child,
 	}
 
 	return c
 }
 
 TexturePanel :: struct {
-	child: ^Component,
-	texture: rl.Texture2D,
+	child:      ^Component,
+	texture:    rl.Texture2D,
 	tint_color: rl.Color,
 }
 
-make_texture_panel :: proc(texture: rl.Texture2D, min_size: rl.Vector2, tint_color: rl.Color = rl.WHITE, child: ^Component = nil) -> ^Component {
+make_texture_panel :: proc(
+	texture: rl.Texture2D,
+	min_size: rl.Vector2,
+	tint_color: rl.Color = rl.WHITE,
+	child: ^Component = nil,
+) -> ^Component {
 	c := new(Component)
 
 	c.size = min_size
 	c.min_size = min_size
 
-	c.variant = TexturePanel{
+	c.variant = TexturePanel {
 		texture    = texture,
 		tint_color = tint_color,
-		child    = child,
+		child      = child,
 	}
 
 	return c
@@ -70,27 +75,33 @@ make_pill :: proc(color: rl.Color, min_size: rl.Vector2, child: ^Component = nil
 	c.size = min_size
 	c.min_size = min_size
 
-	c.variant = Pill{
-		color    = color,
-		child    = child,
+	c.variant = Pill {
+		color = color,
+		child = child,
 	}
 
 	return c
 }
 
 Label :: struct {
-	text:       cstring,
-	font: 		rl.Font,
-	font_size:  f32,
-	color:      rl.Color,
-	alignment:  AnchorType,
+	text:      cstring,
+	font:      rl.Font,
+	font_size: f32,
+	color:     rl.Color,
+	alignment: AnchorType,
 }
 
-make_label :: proc(text: string, font: rl.Font, font_size: f32 = 20.0, color: rl.Color = rl.BLACK, alignment: AnchorType = .Center) -> ^Component {
+make_label :: proc(
+	text: string,
+	font: rl.Font,
+	font_size: f32 = 20.0,
+	color: rl.Color = rl.BLACK,
+	alignment: AnchorType = .Center,
+) -> ^Component {
 	c := new(Component)
-	c.variant = Label{
+	c.variant = Label {
 		text      = strings.clone_to_cstring(text),
-		font 	  = font,
+		font      = font,
 		font_size = font_size,
 		color     = color,
 		alignment = alignment,
@@ -123,11 +134,16 @@ LoadingBar :: struct {
 	background_color: rl.Color,
 }
 
-make_loading_bar :: proc(current, max: f32, color: rl.Color, bg_color: rl.Color, size: rl.Vector2) -> ^Component {
+make_loading_bar :: proc(
+	current, max: f32,
+	color: rl.Color,
+	bg_color: rl.Color,
+	size: rl.Vector2,
+) -> ^Component {
 	c := new(Component)
 	c.desired_size = size
-	c.min_size     = size
-	c.variant = LoadingBar{
+	c.min_size = size
+	c.variant = LoadingBar {
 		current          = current,
 		max              = max,
 		color            = color,
@@ -147,43 +163,53 @@ loading_bar_set_color :: proc(component: ^Component, new_color: rl.Color) {
 GraphValueGetter :: #type proc(data: rawptr, index: int) -> f32
 
 Graph :: struct {
-	child: ^Component,
+	child:                                     ^Component,
 	color_background, color_grid, color_lines: rl.Color,
-	point_size: f32,
-	data_buffer: rawptr,
-	data_count: int,
-	get_value: GraphValueGetter,
-	min_val, max_val: f32,
-	interpolate_points: bool,
+	point_size:                                f32,
+	data_buffer:                               rawptr,
+	data_count:                                int,
+	get_value:                                 GraphValueGetter,
+	min_val, max_val:                          f32,
+	interpolate_points:                        bool,
 }
 
-make_graph :: proc(min_size: rl.Vector2, interpolate_points: bool = false, child: ^Component = nil) -> ^Component {
+make_graph :: proc(
+	min_size: rl.Vector2,
+	interpolate_points: bool = false,
+	child: ^Component = nil,
+) -> ^Component {
 	c := new(Component)
 
 	c.size = min_size
 	c.min_size = min_size
 
-	c.variant = Graph{
-		child = child,
+	c.variant = Graph {
+		child              = child,
 		color_background   = rl.DARKGRAY,
-		color_grid   = rl.Color{128.0, 128.0, 128.0, 128.0},
-		color_lines   = rl.ORANGE,
-		point_size = 2.0,
+		color_grid         = rl.Color{128.0, 128.0, 128.0, 128.0},
+		color_lines        = rl.ORANGE,
+		point_size         = 2.0,
 		interpolate_points = interpolate_points,
 	}
 
 	return c
 }
 
-graph_set_data :: proc(component: ^Component, data_buffer: rawptr, count: int, getter: GraphValueGetter, min_v, max_v: f32) {
+graph_set_data :: proc(
+	component: ^Component,
+	data_buffer: rawptr,
+	count: int,
+	getter: GraphValueGetter,
+	min_v, max_v: f32,
+) {
 	if component == nil do return
 
 	if graph, ok := &component.variant.(Graph); ok {
 		graph.data_buffer = data_buffer
-		graph.data_count  = count
-		graph.get_value   = getter
-		graph.min_val     = min_v
-		graph.max_val     = max_v
+		graph.data_count = count
+		graph.get_value = getter
+		graph.min_val = min_v
+		graph.max_val = max_v
 	}
 }
 
@@ -204,26 +230,26 @@ graph_set_point_size :: proc(component: ^Component, point_size: f32) {
 }
 
 RangeIndicator :: struct {
-    min_val, max_val, current_val: f64,
-    bar_color, knob_color, background_color: rl.Color,
-    show_labels: bool, // Optional: Draw "Min" and "Max" text next to it
+	min_val, max_val, current_val:           f64,
+	bar_color, knob_color, background_color: rl.Color,
+	show_labels:                             bool, // Optional: Draw "Min" and "Max" text next to it
 }
 
 make_range_indicator :: proc(min_v, max_v, current: f64, size: rl.Vector2) -> ^Component {
-    c := new(Component)
+	c := new(Component)
 
-    c.desired_size = size
-    c.min_size = size
+	c.desired_size = size
+	c.min_size = size
 
-    c.variant = RangeIndicator{
-        min_val = min_v,
-        max_val = max_v,
-        current_val = current,
-        bar_color = rl.GRAY,
-        knob_color = rl.WHITE,
-        background_color = rl.DARKGRAY,
-    }
-    return c
+	c.variant = RangeIndicator {
+		min_val          = min_v,
+		max_val          = max_v,
+		current_val      = current,
+		bar_color        = rl.GRAY,
+		knob_color       = rl.WHITE,
+		background_color = rl.DARKGRAY,
+	}
+	return c
 }
 
 range_indicator_set_data :: proc(component: ^Component, min_val, max_val, current_val: f64) {
@@ -231,7 +257,7 @@ range_indicator_set_data :: proc(component: ^Component, min_val, max_val, curren
 
 	if range_indicator, ok := &component.variant.(RangeIndicator); ok {
 		range_indicator.min_val = min_val
-        range_indicator.max_val = max_val
-        range_indicator.current_val = current_val
+		range_indicator.max_val = max_val
+		range_indicator.current_val = current_val
 	}
 }

@@ -8,7 +8,7 @@ StackContainer :: struct {
 
 make_stack :: proc(children: ..^Component) -> ^Component {
 	c := new(Component)
-	stack := StackContainer{
+	stack := StackContainer {
 		children = make([dynamic]^Component),
 	}
 	for child in children do append(&stack.children, child)
@@ -30,13 +30,13 @@ AnchorType :: enum {
 
 AnchorContainer :: struct {
 	child: ^Component,
-	type: AnchorType,
+	type:  AnchorType,
 }
 
 make_anchor :: proc(type: AnchorType, child: ^Component = nil) -> ^Component {
 	c := new(Component)
 
-	c.variant = AnchorContainer{
+	c.variant = AnchorContainer {
 		type  = type,
 		child = child,
 	}
@@ -66,22 +66,28 @@ BoxCrossAlignment :: enum {
 }
 
 BoxContainer :: struct {
-	children: [dynamic]^Component,
-	direction: BoxDirection,
-	main_alignment: BoxMainAlignment,
+	children:        [dynamic]^Component,
+	direction:       BoxDirection,
+	main_alignment:  BoxMainAlignment,
 	cross_alignment: BoxCrossAlignment,
-	gap: int,
+	gap:             int,
 }
 
-make_box :: proc(direction: BoxDirection, main: BoxMainAlignment, cross: BoxCrossAlignment, gap: int, children: ..^Component) -> ^Component {
+make_box :: proc(
+	direction: BoxDirection,
+	main: BoxMainAlignment,
+	cross: BoxCrossAlignment,
+	gap: int,
+	children: ..^Component,
+) -> ^Component {
 	c := new(Component)
 
-	box := BoxContainer{
-		direction = direction,
-		main_alignment = main,
+	box := BoxContainer {
+		direction       = direction,
+		main_alignment  = main,
 		cross_alignment = cross,
-		gap = gap,
-		children = make([dynamic]^Component),
+		gap             = gap,
+		children        = make([dynamic]^Component),
 	}
 
 	for child in children do append(&box.children, child)
@@ -108,38 +114,41 @@ box_remove_child :: proc(box: ^Component, child_to_remove: ^Component) {
 }
 
 MarginContainer :: struct {
-	child: ^Component,
+	child:                                                ^Component,
 	margin_top, margin_right, margin_bottom, margin_left: int,
 }
 
-make_margin :: proc(margin_top, margin_right, margin_bottom, margin_left: int, child: ^Component = nil) -> ^Component {
+make_margin :: proc(
+	margin_top, margin_right, margin_bottom, margin_left: int,
+	child: ^Component = nil,
+) -> ^Component {
 	c := new(Component)
 
-	c.variant = MarginContainer{
-		margin_top  = margin_top,
+	c.variant = MarginContainer {
+		margin_top    = margin_top,
 		margin_right  = margin_right,
-		margin_bottom  = margin_bottom,
-		margin_left  = margin_left,
-		child = child,
+		margin_bottom = margin_bottom,
+		margin_left   = margin_left,
+		child         = child,
 	}
 
 	return c
 }
 
 ScrollContainer :: struct {
-	child: ^Component,
-	scroll_y:        f32,        // Tracks how far the view is scrolled down
-	content_height:  f32,        // Calculated max height of the content
-	viewport_height: f32,        // The height the parent allocated to this container
-	scrollable_range: f32,       // content_height - viewport_height
-	scroll_bar_dragging: bool,	 // Tracks if the scroll bar is currently being dragged
+	child:               ^Component,
+	scroll_y:            f32, // Tracks how far the view is scrolled down
+	content_height:      f32, // Calculated max height of the content
+	viewport_height:     f32, // The height the parent allocated to this container
+	scrollable_range:    f32, // content_height - viewport_height
+	scroll_bar_dragging: bool, // Tracks if the scroll bar is currently being dragged
 }
 
 make_scroll_container :: proc(min_size: rl.Vector2, child: ^Component = nil) -> ^Component {
 	c := new(Component)
 	c.min_size = min_size
 
-	c.variant = ScrollContainer{
+	c.variant = ScrollContainer {
 		child = child,
 	}
 	return c

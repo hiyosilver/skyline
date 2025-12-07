@@ -1,7 +1,7 @@
 package textures
 
-import rl "vendor:raylib"
 import "core:fmt"
+import rl "vendor:raylib"
 
 BuildingTextureId :: enum {
 	SkyscraperCrownPlaza,
@@ -27,29 +27,32 @@ building_textures: map[BuildingTextureId]BuildingTextures
 ui_textures: map[UiTextureId]rl.Texture2D
 
 load_textures :: proc(asset_dir: string) {
-    building_textures = make(map[BuildingTextureId]BuildingTextures, len(BuildingTextureId))
-    texture_file_path, normal_texture_file_path: cstring
-    for id in BuildingTextureId {
-    	switch id {
+	building_textures = make(map[BuildingTextureId]BuildingTextures, len(BuildingTextureId))
+	texture_file_path, normal_texture_file_path: cstring
+	for id in BuildingTextureId {
+		switch id {
 		case .SkyscraperCrownPlaza:
 			texture_file_path = fmt.caprintf("%s/images/skyscraper_crown_plaza.png", asset_dir)
-			normal_texture_file_path = fmt.caprintf("%s/images/skyscraper_crown_plaza_normal.png", asset_dir)
+			normal_texture_file_path = fmt.caprintf(
+				"%s/images/skyscraper_crown_plaza_normal.png",
+				asset_dir,
+			)
 		case .SkyscraperAtlasHotel:
 			texture_file_path = fmt.caprintf("%s/images/atlas_hotel.png", asset_dir)
 			normal_texture_file_path = fmt.caprintf("%s/images/atlas_hotel.png", asset_dir)
-    	}
-    	building_textures[id] = {
-    		rl.LoadTexture(texture_file_path),
-    		rl.LoadTexture(normal_texture_file_path),
-    	}
-    	delete(texture_file_path)
-    	delete(normal_texture_file_path)
-    }
+		}
+		building_textures[id] = {
+			rl.LoadTexture(texture_file_path),
+			rl.LoadTexture(normal_texture_file_path),
+		}
+		delete(texture_file_path)
+		delete(normal_texture_file_path)
+	}
 
-    ui_textures = make(map[UiTextureId]rl.Texture2D, len(UiTextureId))
+	ui_textures = make(map[UiTextureId]rl.Texture2D, len(UiTextureId))
 
-    for id in UiTextureId {
-    	switch id {
+	for id in UiTextureId {
+		switch id {
 		case .Circle:
 			texture_file_path = fmt.caprintf("%s/images/ui/circle.png", asset_dir)
 		case .Ring:
@@ -60,13 +63,13 @@ load_textures :: proc(asset_dir: string) {
 			texture_file_path = fmt.caprintf("%s/images/ui/box.png", asset_dir)
 		case .Tick:
 			texture_file_path = fmt.caprintf("%s/images/ui/tick.png", asset_dir)
-    	}
-    	tex := rl.LoadTexture(texture_file_path)
-    	rl.GenTextureMipmaps(&tex)
-    	rl.SetTextureFilter(tex, .TRILINEAR)
-    	ui_textures[id] = tex
-    	delete(texture_file_path)
-    }
+		}
+		tex := rl.LoadTexture(texture_file_path)
+		rl.GenTextureMipmaps(&tex)
+		rl.SetTextureFilter(tex, .TRILINEAR)
+		ui_textures[id] = tex
+		delete(texture_file_path)
+	}
 }
 
 @(fini)

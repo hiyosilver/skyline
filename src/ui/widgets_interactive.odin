@@ -16,26 +16,31 @@ SimpleButtonClickType :: enum {
 }
 
 SimpleButton :: struct {
-	child:      ^Component,
-	state: SimpleButtonState,
-	click_type: SimpleButtonClickType,
+	child:                                       ^Component,
+	state:                                       SimpleButtonState,
+	click_type:                                  SimpleButtonClickType,
 	color_default, color_hovered, color_pressed: rl.Color,
-	padding: f32,
+	padding:                                     f32,
 }
 
-make_simple_button :: proc(click_type: SimpleButtonClickType, color: rl.Color, min_size: rl.Vector2, child: ^Component = nil) -> ^Component {
+make_simple_button :: proc(
+	click_type: SimpleButtonClickType,
+	color: rl.Color,
+	min_size: rl.Vector2,
+	child: ^Component = nil,
+) -> ^Component {
 	c := new(Component)
 
 	c.min_size = min_size
 
-	c.variant = SimpleButton{
-		state = .Idle,
-		click_type = click_type,
+	c.variant = SimpleButton {
+		state         = .Idle,
+		click_type    = click_type,
 		color_default = color,
 		color_hovered = rl.ColorBrightness(color, 0.2),
 		color_pressed = rl.ColorBrightness(color, -0.2),
-		padding = 4.0,
-		child    = child,
+		padding       = 4.0,
+		child         = child,
 	}
 
 	return c
@@ -63,19 +68,22 @@ button_set_disabled :: proc(component: ^Component, disabled: bool) {
 }
 
 RadioButton :: struct {
-	selected: bool,
-	state: SimpleButtonState,
+	selected:                bool,
+	state:                   SimpleButtonState,
 	connected_radio_buttons: [dynamic]^Component,
 }
 
-make_radio_button :: proc(min_size: rl.Vector2 = {20.0, 20.0}, selected: bool = false) -> ^Component {
+make_radio_button :: proc(
+	min_size: rl.Vector2 = {20.0, 20.0},
+	selected: bool = false,
+) -> ^Component {
 	c := new(Component)
 
 	c.min_size = min_size
 
-	c.variant = RadioButton{
-		selected = selected,
-		state = .Idle,
+	c.variant = RadioButton {
+		selected                = selected,
+		state                   = .Idle,
 		connected_radio_buttons = make([dynamic]^Component),
 	}
 
@@ -120,7 +128,7 @@ radio_button_was_activated :: proc(component: ^Component) -> bool {
 
 CheckBox :: struct {
 	selected: bool,
-	state: SimpleButtonState,
+	state:    SimpleButtonState,
 }
 
 make_check_box :: proc(min_size: rl.Vector2 = {18.0, 18.0}, selected: bool = false) -> ^Component {
@@ -128,9 +136,9 @@ make_check_box :: proc(min_size: rl.Vector2 = {18.0, 18.0}, selected: bool = fal
 
 	c.min_size = min_size
 
-	c.variant = CheckBox{
+	c.variant = CheckBox {
 		selected = selected,
-		state = .Idle,
+		state    = .Idle,
 	}
 
 	return c

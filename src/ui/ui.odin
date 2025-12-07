@@ -1,15 +1,15 @@
 package ui
 
-import rl "vendor:raylib"
-import "core:math"
 import "../global"
 import "../input"
 import "../textures"
+import "core:math"
+import rl "vendor:raylib"
 
 Component :: struct {
 	position, size, min_size, desired_size: rl.Vector2,
-	variant: ComponentVariant,
-	state: ComponentState,
+	variant:                                ComponentVariant,
+	state:                                  ComponentState,
 }
 
 ComponentState :: enum {
@@ -47,7 +47,7 @@ update_components_recursive :: proc(component: ^Component, base_rect: rl.Rectang
 	arrange_components(component, base_rect)
 }
 
-@(private="file")
+@(private = "file")
 get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 	if component == nil || component.state == .Inactive do return {}
 
@@ -73,13 +73,13 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 			processed_children := 0
 			for child in v.children {
 				if child == nil || child.state == .Inactive do continue
-				
+
 				child_desired_size := get_desired_size(child)
-				
+
 				if v.direction == .Vertical {
 					desired_size.x = max(desired_size.x, child_desired_size.x)
 					desired_size.y += child_desired_size.y
-					
+
 					if processed_children < visible_children - 1 {
 						desired_size.y += f32(v.gap)
 					}
@@ -104,27 +104,42 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 		desired_size = component.min_size
 	case Panel:
 		desired_size = get_desired_size(v.child)
-		desired_size = {max(component.min_size.x, desired_size.x), max(component.min_size.y, desired_size.y)}
+		desired_size = {
+			max(component.min_size.x, desired_size.x),
+			max(component.min_size.y, desired_size.y),
+		}
 	case TexturePanel:
 		desired_size = get_desired_size(v.child)
-		desired_size = {max(component.min_size.x, desired_size.x), max(component.min_size.y, desired_size.y)}
+		desired_size = {
+			max(component.min_size.x, desired_size.x),
+			max(component.min_size.y, desired_size.y),
+		}
 	case Pill:
 		child_desired_size := get_desired_size(v.child) + {0.0, 2.0}
 		desired_size.x = child_desired_size.x + child_desired_size.y
 		desired_size.y = child_desired_size.y
-		desired_size = {max(component.min_size.x, desired_size.x), max(component.min_size.y, desired_size.y)}
+		desired_size = {
+			max(component.min_size.x, desired_size.x),
+			max(component.min_size.y, desired_size.y),
+		}
 	case SimpleButton:
 		child_desired_size := get_desired_size(v.child)
 		desired_size.x = child_desired_size.x + (v.padding * 2)
 		desired_size.y = child_desired_size.y + (v.padding * 2)
-		desired_size = {max(component.min_size.x, desired_size.x), max(component.min_size.y, desired_size.y)}
+		desired_size = {
+			max(component.min_size.x, desired_size.x),
+			max(component.min_size.y, desired_size.y),
+		}
 	case Label:
 		desired_size = rl.MeasureTextEx(v.font, v.text, v.font_size, 2.0)
 	case RadioButton, CheckBox, LoadingBar:
 		desired_size = component.min_size
 	case Graph:
 		desired_size = get_desired_size(v.child)
-		desired_size = {max(component.min_size.x, desired_size.x), max(component.min_size.y, desired_size.y)}
+		desired_size = {
+			max(component.min_size.x, desired_size.x),
+			max(component.min_size.y, desired_size.y),
+		}
 	case RangeIndicator:
 		desired_size = component.min_size
 	}
@@ -134,12 +149,12 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 	return desired_size
 }
 
-@(private="file")
+@(private = "file")
 arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 	if component == nil || component.state == .Inactive do return
 
 	component.position = {actual_rect.x, actual_rect.y}
-	component.size     = {actual_rect.width, actual_rect.height}
+	component.size = {actual_rect.width, actual_rect.height}
 
 	switch &v in component.variant {
 	case StackContainer:
@@ -259,16 +274,16 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 				switch v.cross_alignment {
 				case .Start:
 					child_rect.width = child.desired_size.x
-					child_rect.x     = actual_rect.x
+					child_rect.x = actual_rect.x
 				case .Center:
 					child_rect.width = child.desired_size.x
-					child_rect.x     = actual_rect.x + (actual_rect.width - child_rect.width) * 0.5
+					child_rect.x = actual_rect.x + (actual_rect.width - child_rect.width) * 0.5
 				case .End:
 					child_rect.width = child.desired_size.x
-					child_rect.x     = actual_rect.x + (actual_rect.width - child_rect.width)
+					child_rect.x = actual_rect.x + (actual_rect.width - child_rect.width)
 				case .Fill:
 					child_rect.width = actual_rect.width
-					child_rect.x     = actual_rect.x
+					child_rect.x = actual_rect.x
 				}
 
 				child_rect.y = cursor.y
@@ -285,16 +300,16 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 				switch v.cross_alignment {
 				case .Start:
 					child_rect.height = child.desired_size.y
-					child_rect.y      = actual_rect.y
+					child_rect.y = actual_rect.y
 				case .Center:
 					child_rect.height = child.desired_size.y
-					child_rect.y      = actual_rect.y + (actual_rect.height - child_rect.height) * 0.5
+					child_rect.y = actual_rect.y + (actual_rect.height - child_rect.height) * 0.5
 				case .End:
 					child_rect.height = child.desired_size.y
-					child_rect.y      = actual_rect.y + (actual_rect.height - child_rect.height)
+					child_rect.y = actual_rect.y + (actual_rect.height - child_rect.height)
 				case .Fill:
 					child_rect.height = actual_rect.height
-					child_rect.y      = actual_rect.y
+					child_rect.y = actual_rect.y
 				}
 
 				child_rect.x = cursor.x
@@ -307,7 +322,7 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 
 	case MarginContainer:
 		if v.child != nil {
-			child_rect := rl.Rectangle{
+			child_rect := rl.Rectangle {
 				x      = actual_rect.x + f32(v.margin_left),
 				y      = actual_rect.y + f32(v.margin_top),
 				width  = actual_rect.width - f32(v.margin_left + v.margin_right),
@@ -319,12 +334,12 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 	case ScrollContainer:
 		if v.child != nil {
 			v.viewport_height = actual_rect.height
-			v.content_height  = v.child.desired_size.y
+			v.content_height = v.child.desired_size.y
 			v.scrollable_range = max(0.0, v.content_height - v.viewport_height)
 
 			v.scroll_y = math.clamp(v.scroll_y, 0.0, v.scrollable_range)
 
-			child_full_rect := rl.Rectangle{
+			child_full_rect := rl.Rectangle {
 				actual_rect.x,
 				actual_rect.y - v.scroll_y,
 				actual_rect.width - (v.content_height > v.viewport_height ? 16.0 : 0.0),
@@ -345,7 +360,7 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 
 	case Pill:
 		if v.child != nil {
-			child_rect := rl.Rectangle{
+			child_rect := rl.Rectangle {
 				x      = actual_rect.x + actual_rect.height * 0.5,
 				y      = actual_rect.y,
 				width  = actual_rect.width - actual_rect.height,
@@ -359,10 +374,10 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 			padding_x := v.padding * 2
 			padding_y := v.padding * 2
 
-			safe_width  := max(0.0, actual_rect.width - padding_x)
+			safe_width := max(0.0, actual_rect.width - padding_x)
 			safe_height := max(0.0, actual_rect.height - padding_y)
 
-			child_rect := rl.Rectangle{
+			child_rect := rl.Rectangle {
 				x      = actual_rect.x + v.padding,
 				y      = actual_rect.y + v.padding,
 				width  = safe_width,
@@ -386,9 +401,11 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 
 	captured := false
 	mouse_pos := input_data.mouse_position
-	rect := rl.Rectangle{
-		component.position.x, component.position.y,
-		component.size.x,     component.size.y,
+	rect := rl.Rectangle {
+		component.position.x,
+		component.position.y,
+		component.size.x,
+		component.size.y,
 	}
 
 	switch &v in component.variant {
@@ -435,7 +452,7 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 		}
 
 		if v.scrollable_range > 0.0 {
-			scroll_bar_rect := rl.Rectangle{
+			scroll_bar_rect := rl.Rectangle {
 				component.position.x + component.size.x - 16.0,
 				component.position.y,
 				16.0,
@@ -454,7 +471,11 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 			}
 
 			if v.scroll_bar_dragging {
-				vertical_position_normalized := clamp((input_data.mouse_position.y - component.position.y) / v.viewport_height, 0.0, 1.0)
+				vertical_position_normalized := clamp(
+					(input_data.mouse_position.y - component.position.y) / v.viewport_height,
+					0.0,
+					1.0,
+				)
 				v.scroll_y = v.scrollable_range * vertical_position_normalized
 			}
 		}
@@ -591,8 +612,19 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 	case ScrollContainer:
 		if v.child != nil {
 			if v.scrollable_range > 0.0 {
-				rl.DrawCircleV({component.position.x + component.size.x - 7.0, component.position.y + 7.0}, 7.0, rl.DARKGRAY)
-				rl.DrawCircleV({component.position.x + component.size.x - 7.0, component.position.y + component.size.y - 7.0}, 7.0, rl.DARKGRAY)
+				rl.DrawCircleV(
+					{component.position.x + component.size.x - 7.0, component.position.y + 7.0},
+					7.0,
+					rl.DARKGRAY,
+				)
+				rl.DrawCircleV(
+					{
+						component.position.x + component.size.x - 7.0,
+						component.position.y + component.size.y - 7.0,
+					},
+					7.0,
+					rl.DARKGRAY,
+				)
 
 				rl.DrawRectangleV(
 					{component.position.x + component.size.x - 14.0, component.position.y + 7.0},
@@ -602,7 +634,7 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 
 				total_content_height := v.viewport_height + v.scrollable_range
 
-				knob_length_raw : f32 = 0.0
+				knob_length_raw: f32 = 0.0
 				if total_content_height > 0 {
 					visible_ratio := v.viewport_height / total_content_height
 					knob_length_raw = v.viewport_height * visible_ratio
@@ -612,31 +644,40 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 
 				track_space_available := v.viewport_height - scroll_knob_length
 
-				scroll_progress : f32 = 0.0
+				scroll_progress: f32 = 0.0
 				if v.scrollable_range > 0 {
 					scroll_progress = v.scroll_y / v.scrollable_range
 				}
 
 				scroll_knob_start := track_space_available * scroll_progress
-				scroll_knob_end   := scroll_knob_start + scroll_knob_length
+				scroll_knob_end := scroll_knob_start + scroll_knob_length
 
 				scroll_bar_color := v.scroll_bar_dragging ? rl.WHITE : rl.RAYWHITE
 
 				rl.DrawCircleV(
-					{component.position.x + component.size.x - 7.0, component.position.y + scroll_knob_start + 7.0}, 
-					7.0, 
+					{
+						component.position.x + component.size.x - 7.0,
+						component.position.y + scroll_knob_start + 7.0,
+					},
+					7.0,
 					scroll_bar_color,
 				)
 
 				rl.DrawCircleV(
-					{component.position.x + component.size.x - 7.0, component.position.y + scroll_knob_end - 7.0}, 
-					7.0, 
+					{
+						component.position.x + component.size.x - 7.0,
+						component.position.y + scroll_knob_end - 7.0,
+					},
+					7.0,
 					scroll_bar_color,
 				)
 
 				rl.DrawRectangleV(
-					{component.position.x + component.size.x - 14.0, component.position.y + scroll_knob_start + 7.0}, 
-					{14.0, scroll_knob_length - 14.0}, 
+					{
+						component.position.x + component.size.x - 14.0,
+						component.position.y + scroll_knob_start + 7.0,
+					},
+					{14.0, scroll_knob_length - 14.0},
 					scroll_bar_color,
 				)
 			}
@@ -656,9 +697,11 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 		draw_components_recursive(v.child, debug)
 	case TexturePanel:
 		source := rl.Rectangle{0, 0, f32(v.texture.width), f32(v.texture.height)}
-		dest   := rl.Rectangle{
-			component.position.x, component.position.y,
-			component.size.x, component.size.y,
+		dest := rl.Rectangle {
+			component.position.x,
+			component.position.y,
+			component.size.x,
+			component.size.y,
 		}
 		rl.DrawTexturePro(v.texture, source, dest, {}, 0, v.tint_color)
 		draw_components_recursive(v.child, debug)
@@ -666,25 +709,40 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 		offset := component.size.y * 0.5
 		rl.DrawCircleV(component.position + {offset, offset}, offset, v.color)
 		rl.DrawCircleV(component.position + {component.size.x - offset, offset}, offset, v.color)
-		rl.DrawRectangleV(component.position + {offset, 0.0}, {component.size.x - component.size.y, component.size.y}, v.color)
+		rl.DrawRectangleV(
+			component.position + {offset, 0.0},
+			{component.size.x - component.size.y, component.size.y},
+			v.color,
+		)
 		draw_components_recursive(v.child, debug)
 	case SimpleButton:
 		bg_color: rl.Color
 		switch v.state {
-		case .Idle:     bg_color = v.color_default
-		case .Hovered:  bg_color = v.color_hovered
-		case .Pressed:  bg_color = v.color_pressed
-		case .Released: bg_color = v.color_hovered
-		case .Disabled: bg_color = rl.GRAY
+		case .Idle:
+			bg_color = v.color_default
+		case .Hovered:
+			bg_color = v.color_hovered
+		case .Pressed:
+			bg_color = v.color_pressed
+		case .Released:
+			bg_color = v.color_hovered
+		case .Disabled:
+			bg_color = rl.GRAY
 		}
 
 		rl.DrawRectangleV(component.position, component.size, bg_color)
 
 		if v.state == .Pressed {
-			rl.DrawRectangleLinesEx(rl.Rectangle{
-				component.position.x, component.position.y,
-				component.size.x, component.size.y,
-			}, 2.0, rl.ColorBrightness(bg_color, -0.3))
+			rl.DrawRectangleLinesEx(
+				rl.Rectangle {
+					component.position.x,
+					component.position.y,
+					component.size.x,
+					component.size.y,
+				},
+				2.0,
+				rl.ColorBrightness(bg_color, -0.3),
+			)
 		}
 
 		draw_components_recursive(v.child, debug)
@@ -693,37 +751,45 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 		ring_texture := textures.ui_textures[textures.UiTextureId.Ring]
 
 		ring_color := rl.SKYBLUE
-		dot_color  := rl.DARKBLUE
+		dot_color := rl.DARKBLUE
 		background_color := rl.BLACK
 		foreground_color := rl.RAYWHITE
 
 		source := rl.Rectangle{0, 0, f32(circle_texture.width), f32(circle_texture.height)}
-		dest   := rl.Rectangle{
-			component.position.x, component.position.y,
-			component.size.x, component.size.y,
+		dest := rl.Rectangle {
+			component.position.x,
+			component.position.y,
+			component.size.x,
+			component.size.y,
 		}
 		rl.DrawTexturePro(circle_texture, source, dest, {}, 0, background_color)
 
 		source = rl.Rectangle{0, 0, f32(circle_texture.width), f32(circle_texture.height)}
-		dest   = rl.Rectangle{
-			component.position.x + 1, component.position.y + 1,
-			component.size.x - 2, component.size.y - 2,
+		dest = rl.Rectangle {
+			component.position.x + 1,
+			component.position.y + 1,
+			component.size.x - 2,
+			component.size.y - 2,
 		}
 		rl.DrawTexturePro(circle_texture, source, dest, {}, 0, foreground_color)
 
 		if v.selected {
 			source = rl.Rectangle{0, 0, f32(circle_texture.width), f32(circle_texture.height)}
-			dest   = rl.Rectangle{
-				component.position.x + 5.0, component.position.y + 5.0,
-				component.size.x - 10.0, component.size.y - 10.0,
+			dest = rl.Rectangle {
+				component.position.x + 5.0,
+				component.position.y + 5.0,
+				component.size.x - 10.0,
+				component.size.y - 10.0,
 			}
 			rl.DrawTexturePro(circle_texture, source, dest, {}, 0, dot_color)
 		}
 		if v.state == .Hovered || v.state == .Pressed {
 			source = rl.Rectangle{0, 0, f32(ring_texture.width), f32(ring_texture.height)}
-			dest   = rl.Rectangle{
-				component.position.x + 1, component.position.y + 1,
-				component.size.x - 2, component.size.y - 2,
+			dest = rl.Rectangle {
+				component.position.x + 1,
+				component.position.y + 1,
+				component.size.x - 2,
+				component.size.y - 2,
 			}
 			rl.DrawTexturePro(ring_texture, source, dest, {}, 0, ring_color)
 		}
@@ -733,37 +799,45 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 		tick_texture := textures.ui_textures[textures.UiTextureId.Tick]
 
 		box_color := rl.SKYBLUE
-		tick_color  := rl.DARKBLUE
+		tick_color := rl.DARKBLUE
 		background_color := rl.BLACK
 		foreground_color := rl.RAYWHITE
 
 		source := rl.Rectangle{0, 0, f32(square_texture.width), f32(square_texture.height)}
-		dest   := rl.Rectangle{
-			component.position.x, component.position.y,
-			component.size.x, component.size.y,
+		dest := rl.Rectangle {
+			component.position.x,
+			component.position.y,
+			component.size.x,
+			component.size.y,
 		}
 		rl.DrawTexturePro(square_texture, source, dest, {}, 0, background_color)
 
 		source = rl.Rectangle{0, 0, f32(square_texture.width), f32(square_texture.height)}
-		dest   = rl.Rectangle{
-			component.position.x + 1, component.position.y + 1,
-			component.size.x - 2, component.size.y - 2,
+		dest = rl.Rectangle {
+			component.position.x + 1,
+			component.position.y + 1,
+			component.size.x - 2,
+			component.size.y - 2,
 		}
 		rl.DrawTexturePro(square_texture, source, dest, {}, 0, foreground_color)
 
 		if v.selected {
 			source = rl.Rectangle{0, 0, f32(tick_texture.width), f32(tick_texture.height)}
-			dest   = rl.Rectangle{
-				component.position.x + 1, component.position.y + 1,
-				component.size.x - 2, component.size.y - 2,
+			dest = rl.Rectangle {
+				component.position.x + 1,
+				component.position.y + 1,
+				component.size.x - 2,
+				component.size.y - 2,
 			}
 			rl.DrawTexturePro(tick_texture, source, dest, {}, 0, tick_color)
 		}
 		if v.state == .Hovered || v.state == .Pressed {
 			source = rl.Rectangle{0, 0, f32(box_texture.width), f32(box_texture.height)}
-			dest   = rl.Rectangle{
-				component.position.x + 1, component.position.y + 1,
-				component.size.x - 2, component.size.y - 2,
+			dest = rl.Rectangle {
+				component.position.x + 1,
+				component.position.y + 1,
+				component.size.x - 2,
+				component.size.y - 2,
 			}
 			rl.DrawTexturePro(box_texture, source, dest, {}, 0, box_color)
 		}
@@ -789,14 +863,7 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 		case:
 		}
 
-		rl.DrawTextEx(
-			v.font,
-			v.text,
-			pos,
-			v.font_size,
-			2.0,
-			v.color,
-		)
+		rl.DrawTextEx(v.font, v.text, pos, v.font_size, 2.0, v.color)
 	case LoadingBar:
 		rl.DrawRectangleV(component.position, component.size, v.background_color)
 
@@ -809,27 +876,43 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 		range := v.max_val - v.min_val
 
 		point_distance := component.size.x / f32(v.data_count - 1)
-		for i in 0..<v.data_count {
+		for i in 0 ..< v.data_count {
 			rl.DrawLineV(
 				{component.position.x + f32(i) * point_distance, component.position.y},
-				{component.position.x + f32(i) * point_distance, component.position.y + component.size.y},
-				v.color_grid)
+				{
+					component.position.x + f32(i) * point_distance,
+					component.position.y + component.size.y,
+				},
+				v.color_grid,
+			)
 
 			val := range == 0.0 ? 0.5 : 1.0 - (v.get_value(v.data_buffer, i) - v.min_val) / range
 
-			new_point := rl.Vector2{component.position.x + f32(i) * point_distance, component.position.y + val * component.size.y}
+			new_point := rl.Vector2 {
+				component.position.x + f32(i) * point_distance,
+				component.position.y + val * component.size.y,
+			}
 
 			if i > 0 {
-				val_prev := range == 0.0 ? 0.5 : 1.0 - (v.get_value(v.data_buffer, i - 1) - v.min_val) / range
-				rl.DrawLineV({component.position.x + f32(i - 1) * point_distance, component.position.y + val_prev * component.size.y}, new_point, v.color_lines)
+				val_prev :=
+					range == 0.0 ? 0.5 : 1.0 - (v.get_value(v.data_buffer, i - 1) - v.min_val) / range
+				rl.DrawLineV(
+					{
+						component.position.x + f32(i - 1) * point_distance,
+						component.position.y + val_prev * component.size.y,
+					},
+					new_point,
+					v.color_lines,
+				)
 
 				if v.interpolate_points && i < v.data_count - 1 {
-					val_next := range == 0.0 ? 0.5 : 1.0 - (v.get_value(v.data_buffer, i + 1) - v.min_val) / range
+					val_next :=
+						range == 0.0 ? 0.5 : 1.0 - (v.get_value(v.data_buffer, i + 1) - v.min_val) / range
 					if !global.approx_equal(val_prev, val) || !global.approx_equal(val, val_next) {
 						rl.DrawCircleV(new_point, v.point_size, v.color_lines)
 					}
 				} else {
-					rl.DrawCircleV(new_point, v.point_size, v.color_lines) 
+					rl.DrawCircleV(new_point, v.point_size, v.color_lines)
 				}
 			} else {
 				rl.DrawCircleV(new_point, v.point_size, v.color_lines)
@@ -837,18 +920,38 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 		}
 		draw_components_recursive(v.child, debug)
 	case RangeIndicator:
-		rl.DrawRectangleGradientH(i32(component.position.x), i32(component.position.y), i32(component.size.x), i32(component.size.y), rl.RED, rl.GREEN)
+		rl.DrawRectangleGradientH(
+			i32(component.position.x),
+			i32(component.position.y),
+			i32(component.size.x),
+			i32(component.size.y),
+			rl.RED,
+			rl.GREEN,
+		)
 
 		range := v.max_val - v.min_val
 
 		if range > 0.0 {
-			t := f32(clamp((v.current_val - v.min_val) / range, 0.0, 1.0) )
-			rl.DrawCircleV(component.position + {t * component.size.x, component.size.y * 0.5}, component.size.y * 0.5, rl.BLACK)
+			t := f32(clamp((v.current_val - v.min_val) / range, 0.0, 1.0))
+			rl.DrawCircleV(
+				component.position + {t * component.size.x, component.size.y * 0.5},
+				component.size.y * 0.5,
+				rl.BLACK,
+			)
 		}
 	}
 
 	if debug {
-		rl.DrawRectangleLinesEx(rl.Rectangle{component.position.x, component.position.y, component.size.x, component.size.y}, 2.0, rl.BLACK)
+		rl.DrawRectangleLinesEx(
+			rl.Rectangle {
+				component.position.x,
+				component.position.y,
+				component.size.x,
+				component.size.y,
+			},
+			2.0,
+			rl.BLACK,
+		)
 		//rl.DrawRectangleLinesEx(rl.Rectangle{component.position.x, component.position.y, component.desired_size.x, component.desired_size.y}, 2.0, rl.BLUE)
 	}
 }
@@ -864,46 +967,46 @@ destroy_components_recursive :: proc(component: ^Component) {
 		delete(v.children)
 	case AnchorContainer:
 		destroy_components_recursive(v.child)
-		//fmt.println("Freeing AnchorContainer!")
+	//fmt.println("Freeing AnchorContainer!")
 	case BoxContainer:
 		for child in v.children {
 			destroy_components_recursive(child)
 		}
 		delete(v.children)
-		//fmt.println("Freeing BoxContainer!")
+	//fmt.println("Freeing BoxContainer!")
 	case MarginContainer:
 		destroy_components_recursive(v.child)
-		//fmt.println("Freeing MarginContainer!")
+	//fmt.println("Freeing MarginContainer!")
 	case ScrollContainer:
 		destroy_components_recursive(v.child)
-		//fmt.println("Freeing ScrollContainer!")
+	//fmt.println("Freeing ScrollContainer!")
 	case Panel:
 		destroy_components_recursive(v.child)
-		//fmt.println("Freeing Panel!")
+	//fmt.println("Freeing Panel!")
 	case TexturePanel:
 		destroy_components_recursive(v.child)
-		//fmt.println("Freeing TexturePanel!")
+	//fmt.println("Freeing TexturePanel!")
 	case Pill:
 		destroy_components_recursive(v.child)
-		//fmt.println("Freeing Pill!")
+	//fmt.println("Freeing Pill!")
 	case SimpleButton:
 		destroy_components_recursive(v.child)
-		//fmt.println("Freeing SimpleButton!")
+	//fmt.println("Freeing SimpleButton!")
 	case RadioButton:
 		delete(v.connected_radio_buttons)
-		//fmt.println("Freeing RadioButton!")
+	//fmt.println("Freeing RadioButton!")
 	case CheckBox:
-		//fmt.println("Freeing CheckBox!")
+	//fmt.println("Freeing CheckBox!")
 	case Label:
 		delete(v.text)
-		//fmt.println("Freeing Label!")
+	//fmt.println("Freeing Label!")
 	case LoadingBar:
-		//fmt.println("Freeing LoadingBar!")
+	//fmt.println("Freeing LoadingBar!")
 	case Graph:
 		destroy_components_recursive(v.child)
-		//fmt.println("Freeing Graph!")
+	//fmt.println("Freeing Graph!")
 	case RangeIndicator:
-		//fmt.println("Freeing RangeIndicator!")
+	//fmt.println("Freeing RangeIndicator!")
 	}
 	free(component)
 }

@@ -1,8 +1,8 @@
 package global
 
+import "base:intrinsics"
 import "core:fmt"
 import "core:math"
-import "base:intrinsics"
 import "core:strings"
 
 approx_equal :: proc(a, b: $T) -> bool where intrinsics.type_is_float(T) {
@@ -37,8 +37,8 @@ is_approx_zero :: proc(x: $T) -> bool where intrinsics.type_is_float(T) {
  * @return A new string with the formatted number.
  */
 format_float_thousands :: proc(
-	val: f64, 
-	precision: int, 
+	val: f64,
+	precision: int,
 	thousand_sep: rune = ',',
 	decimal_sep: rune = '.',
 	allocator := context.temp_allocator,
@@ -53,7 +53,7 @@ format_float_thousands :: proc(
 
 	scale := math.pow(10, f64(precision))
 	rounded_val := math.round(val * scale) / scale
-	
+
 	int_part, frac_part := math.modf(rounded_val)
 	int_val := i64(int_part)
 
@@ -69,20 +69,20 @@ format_float_thousands :: proc(
 
 	for i := start_len; i < n; i += 3 {
 		strings.write_rune(&sb, thousand_sep)
-		strings.write_string(&sb, int_str[i:i+3])
+		strings.write_string(&sb, int_str[i:i + 3])
 	}
 
 	if precision > 0 {
 		strings.write_rune(&sb, decimal_sep)
-		
+
 		frac_val := i64(math.round(frac_part * scale))
-		
+
 		frac_fmt_str := fmt.tprintf("%%0%dd", precision)
 		frac_str := fmt.tprintf(frac_fmt_str, frac_val)
-		
+
 		strings.write_string(&sb, frac_str)
 	}
-	
+
 	return strings.to_string(sb)
 }
 
@@ -120,7 +120,7 @@ format_int_thousands :: proc(
 
 	for i := start_len; i < n; i += 3 {
 		strings.write_rune(&sb, thousand_sep)
-		strings.write_string(&sb, int_str[i:i+3])
+		strings.write_string(&sb, int_str[i:i + 3])
 	}
 
 	return strings.to_string(sb)

@@ -11,25 +11,25 @@ JobResult :: enum {
 }
 
 Job :: struct {
-	name: string,
-	level: int,
-	is_ready, is_active: bool,
+	name:                        string,
+	level:                       int,
+	is_ready, is_active:         bool,
 	ticks_needed, ticks_current: int,
-	income: f64,
-	illegitimate_income: f64,
-	details: union {
-        StandardJob,
-        BuyinJob,
-    },
+	income:                      f64,
+	illegitimate_income:         f64,
+	details:                     union {
+		StandardJob,
+		BuyinJob,
+	},
 }
 
 StandardJob :: struct {
 }
 
 BuyinJob :: struct {
-	buyin_price: f64,
+	buyin_price:              f64,
 	illegitimate_buyin_price: f64,
-	failure_chance: f32,
+	failure_chance:           f32,
 }
 
 tick :: proc(job: ^Job) -> JobResult {
@@ -53,8 +53,8 @@ tick :: proc(job: ^Job) -> JobResult {
 
 deactivate :: proc(job: ^Job) {
 	job.is_ready = false
-    job.is_active = false
-    job.ticks_current = 0
+	job.is_active = false
+	job.ticks_current = 0
 }
 
 toggle_state :: proc(job: ^Job) -> bool {
@@ -62,7 +62,7 @@ toggle_state :: proc(job: ^Job) -> bool {
 		job.is_ready = true
 		return true
 	} else {
-	    deactivate(job)
-	    return false
+		deactivate(job)
+		return false
 	}
 }
