@@ -277,6 +277,19 @@ interact_toggle_job :: proc(simulation_state: ^SimulationState, job_index: int) 
 	}
 }
 
+get_job_by_id :: proc(simulation_state: ^SimulationState, id: types.JobID) -> ^types.Job {
+	target_job: ^types.Job
+
+	for &job in simulation_state.job_entries {
+		if job.id == id {
+			target_job = &job
+			break
+		}
+	}
+
+	return target_job
+}
+
 get_crew_member_by_id :: proc(
 	simulation_state: ^SimulationState,
 	id: types.CrewMemberID,
@@ -295,18 +308,20 @@ get_crew_member_by_id :: proc(
 
 try_assign_crew :: proc(
 	simulation_state: ^SimulationState,
-	job_idx, slot_idx: int,
+	job_id: types.JobID,
+	slot_idx: int,
 	crew_id: types.CrewMemberID,
 ) -> bool {
-	if job_idx >= len(simulation_state.job_entries) do return false
-	target_job := &simulation_state.job_entries[job_idx]
+	target_job := get_job_by_id(simulation_state, job_id)
+	if target_job == nil do return false
 
 	crew_member := get_crew_member_by_id(simulation_state, crew_id)
-	if crew_member == nil do return false
+	if crew_member == nil || crew_member.assigned_to_job_id != 0 do return false
 
 	if details, ok := &target_job.details.(types.BuyinJob); ok {
 		if slot_idx < len(details.crew_member_slots) {
 			details.crew_member_slots[slot_idx].assigned_crew_member = crew_id
+			crew_member.assigned_to_job_id = target_job.id
 
 			jobs.deactivate(&crew_member.default_job)
 
@@ -318,9 +333,9 @@ try_assign_crew :: proc(
 	return false
 }
 
-clear_crew :: proc(simulation_state: ^SimulationState, job_idx, slot_idx: int) {
-	if job_idx >= len(simulation_state.job_entries) do return
-	target_job := &simulation_state.job_entries[job_idx]
+clear_crew :: proc(simulation_state: ^SimulationState, job_id: types.JobID, slot_idx: int) {
+	target_job := get_job_by_id(simulation_state, job_id)
+	if target_job == nil do return
 
 	if details, ok := &target_job.details.(types.BuyinJob); ok {
 		assigned_id := details.crew_member_slots[slot_idx].assigned_crew_member
@@ -329,8 +344,9 @@ clear_crew :: proc(simulation_state: ^SimulationState, job_idx, slot_idx: int) {
 
 		if slot_idx < len(details.crew_member_slots) {
 			details.crew_member_slots[slot_idx].assigned_crew_member = 0
+			crew_member.assigned_to_job_id = 0
 
-			jobs.toggle_state(&crew_member.default_job)
+			jobs.activate(&crew_member.default_job)
 
 			fmt.printf("Cleared ID %d from Job Slot %d\n", crew_member.id, slot_idx)
 		}

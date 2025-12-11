@@ -1,26 +1,47 @@
 package jobs
 
-//import rl "vendor:raylib"
 import "../types"
 import "core:math/rand"
 
-create_buyin_job :: proc() -> types.Job {
-	crew_member_slots := make([dynamic]types.CrewMemberSlot)
+create_job :: proc(
+	name: string,
+	level, ticks_needed: int,
+	income, illegitimate_income: f64,
+	is_buyin_job: bool = false,
+) -> types.Job {
+	@(static) id: types.JobID = 1
+	defer id += 1
 
-	append(&crew_member_slots, types.CrewMemberSlot{.Brawn, 0})
-	append(&crew_member_slots, types.CrewMemberSlot{.Savvy, 0})
+	if is_buyin_job {
+		crew_member_slots := make([dynamic]types.CrewMemberSlot)
 
-	return types.Job {
-		name = "Risky Job",
-		level = 5,
-		ticks_needed = 10,
-		illegitimate_income = 145.0,
-		details = types.BuyinJob {
-			buyin_price = 10.0,
-			illegitimate_buyin_price = 10.0,
-			failure_chance = 0.02,
-			crew_member_slots = crew_member_slots,
-		},
+		append(&crew_member_slots, types.CrewMemberSlot{.Brawn, 0})
+		append(&crew_member_slots, types.CrewMemberSlot{.Savvy, 0})
+
+		return types.Job {
+			id = id,
+			name = name,
+			level = level,
+			ticks_needed = ticks_needed,
+			income = income,
+			illegitimate_income = illegitimate_income,
+			details = types.BuyinJob {
+				buyin_price = 10.0,
+				illegitimate_buyin_price = 10.0,
+				failure_chance = 0.02,
+				crew_member_slots = crew_member_slots,
+			},
+		}
+	} else {
+		return types.Job {
+			id = id,
+			name = name,
+			level = level,
+			ticks_needed = ticks_needed,
+			income = income,
+			illegitimate_income = illegitimate_income,
+			details = types.StandardJob{},
+		}
 	}
 }
 
@@ -41,6 +62,12 @@ tick :: proc(job: ^types.Job) -> types.JobResult {
 		return .Finished
 	}
 	return .Active
+}
+
+activate :: proc(job: ^types.Job) {
+	job.is_ready = true
+	job.is_active = false
+	job.ticks_current = 0
 }
 
 deactivate :: proc(job: ^types.Job) {

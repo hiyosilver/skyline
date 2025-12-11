@@ -98,3 +98,7 @@ generate_crew_member :: proc() -> types.CrewMember {
 
 	return crew_member
 }
+
+is_assigned_to_job :: proc(crew_member: ^types.CrewMember) -> bool {
+	return crew_member.assigned_to_job_id != 0
+}

@@ -9,9 +9,12 @@ CrewMember :: struct {
 	base_salary, base_salary_illegitimate: f64,
 	default_job:                           Job,
 	brawn, savvy, tech, charisma:          int,
+	assigned_to_job_id:                    JobID,
 }
 
 //Jobs
+JobID :: distinct int
+
 JobResult :: enum {
 	Inactive,
 	Active,
@@ -20,6 +23,7 @@ JobResult :: enum {
 }
 
 Job :: struct {
+	id:                          JobID,
 	name:                        string,
 	level:                       int,
 	is_ready, is_active:         bool,

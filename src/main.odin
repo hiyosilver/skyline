@@ -32,7 +32,7 @@ DefaultSelectionState :: struct {
 }
 
 AssignCrewMemberSelectionState :: struct {
-	target_job_index:       int,
+	target_job_id:          types.JobID,
 	target_crew_slot_index: int,
 }
 
@@ -170,36 +170,16 @@ main :: proc() {
 	}
 	append(&buildings_list, building_atlas_hotel)
 
-	jobA := types.Job {
-		name                = "Job A",
-		level               = 2,
-		ticks_needed        = 6,
-		income              = 2.5,
-		illegitimate_income = 1.5,
-		details             = types.StandardJob{},
-	}
+	jobA := jobs.create_job("Job A", 2, 6, 2.5, 1.5)
 	append(&simulation_state.job_entries, jobA)
 
-	jobB := types.Job {
-		name         = "Job B",
-		level        = 1,
-		ticks_needed = 5,
-		income       = 3.0,
-		details      = types.StandardJob{},
-	}
+	jobB := jobs.create_job("Job B", 1, 5, 3.0, 0.0)
 	append(&simulation_state.job_entries, jobB)
 
-
-	jobC := types.Job {
-		name         = "Job C",
-		level        = 1,
-		ticks_needed = 3,
-		income       = 1.5,
-		details      = types.StandardJob{},
-	}
+	jobC := jobs.create_job("Job C", 1, 3, 1.5, 0.0)
 	append(&simulation_state.job_entries, jobC)
 
-	jobD: types.Job = jobs.create_buyin_job()
+	jobD := jobs.create_job("Risky Job", 5, 10, 0.0, 145.0, true)
 	append(&simulation_state.job_entries, jobD)
 
 	jobs_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 16)
@@ -584,10 +564,10 @@ handle_job_card_interactions :: proc() {
 			for slot_display, j in display.crew_slots {
 				if ui.button_was_clicked(slot_display.root_button) {
 					if details.crew_member_slots[j].assigned_crew_member != 0 {
-						simulation.clear_crew(&simulation_state, i, j)
+						simulation.clear_crew(&simulation_state, job.id, j)
 					} else {
 						game_state.selection_state = AssignCrewMemberSelectionState {
-							target_job_index       = i,
+							target_job_id          = job.id,
 							target_crew_slot_index = j,
 						}
 					}
@@ -610,19 +590,21 @@ handle_crew_member_card_interactions :: proc() {
 		if i >= len(game_state.crew_view_models) do break
 		display := &game_state.crew_view_models[i]
 
+		is_assigned_to_job := crew.is_assigned_to_job(crew_member)
+
 		game_ui.update_crew_member_card(
 			display,
 			crew_member,
 			simulation_state.tick_timer,
 			simulation_state.tick_speed,
-			is_crew_selection_mode,
+			is_crew_selection_mode && !is_assigned_to_job,
 		)
 
 		if ui.button_was_clicked(display.root) {
 			if is_crew_selection_mode {
 				if simulation.try_assign_crew(
 					&simulation_state,
-					state.target_job_index,
+					state.target_job_id,
 					state.target_crew_slot_index,
 					crew_member.id,
 				) {
