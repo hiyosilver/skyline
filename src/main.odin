@@ -447,35 +447,7 @@ process_ui_interactions :: proc(input_data: ^input.RawInput) {
 		update_graph()
 	}
 
-	state, is_crew_selection_mode := game_state.selection_state.(AssignCrewMemberSelectionState)
-
-	for i in 0 ..< len(simulation_state.crew_roster) {
-		crew_member := &simulation_state.crew_roster[i]
-		if i >= len(game_state.crew_view_models) do break
-		display := &game_state.crew_view_models[i]
-
-		game_ui.update_crew_member_card(
-			display,
-			crew_member,
-			simulation_state.tick_timer,
-			simulation_state.tick_speed,
-			is_crew_selection_mode,
-		)
-
-		if ui.button_was_clicked(display.root) {
-			if is_crew_selection_mode {
-				if simulation.try_assign_crew(
-					&simulation_state,
-					state.target_job_index,
-					state.target_crew_slot_index,
-					crew_member.id,
-				) {
-					game_state.selection_state = DefaultSelectionState{}
-					sync_ui_visuals()
-				}
-			}
-		}
-	}
+	handle_crew_member_card_interactions()
 
 	if bar, ok := &tick_bar_component.variant.(ui.LoadingBar); ok {
 		bar.current = simulation_state.tick_timer
@@ -612,7 +584,7 @@ handle_job_card_interactions :: proc() {
 			for slot_display, j in display.crew_slots {
 				if ui.button_was_clicked(slot_display.root_button) {
 					if details.crew_member_slots[j].assigned_crew_member != 0 {
-						details.crew_member_slots[j].assigned_crew_member = 0
+						simulation.clear_crew(&simulation_state, i, j)
 					} else {
 						game_state.selection_state = AssignCrewMemberSelectionState {
 							target_job_index       = i,
@@ -626,6 +598,38 @@ handle_job_card_interactions :: proc() {
 		if ui.button_was_clicked(display.start_button) {
 			simulation.interact_toggle_job(&simulation_state, i)
 			break
+		}
+	}
+}
+
+handle_crew_member_card_interactions :: proc() {
+	state, is_crew_selection_mode := game_state.selection_state.(AssignCrewMemberSelectionState)
+
+	for i in 0 ..< len(simulation_state.crew_roster) {
+		crew_member := &simulation_state.crew_roster[i]
+		if i >= len(game_state.crew_view_models) do break
+		display := &game_state.crew_view_models[i]
+
+		game_ui.update_crew_member_card(
+			display,
+			crew_member,
+			simulation_state.tick_timer,
+			simulation_state.tick_speed,
+			is_crew_selection_mode,
+		)
+
+		if ui.button_was_clicked(display.root) {
+			if is_crew_selection_mode {
+				if simulation.try_assign_crew(
+					&simulation_state,
+					state.target_job_index,
+					state.target_crew_slot_index,
+					crew_member.id,
+				) {
+					game_state.selection_state = DefaultSelectionState{}
+					sync_ui_visuals()
+				}
+			}
 		}
 	}
 }

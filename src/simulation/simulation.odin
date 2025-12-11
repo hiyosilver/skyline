@@ -277,6 +277,22 @@ interact_toggle_job :: proc(simulation_state: ^SimulationState, job_index: int) 
 	}
 }
 
+get_crew_member_by_id :: proc(
+	simulation_state: ^SimulationState,
+	id: types.CrewMemberID,
+) -> ^types.CrewMember {
+	target_crew_member: ^types.CrewMember
+
+	for &crew_member in simulation_state.crew_roster {
+		if crew_member.id == id {
+			target_crew_member = &crew_member
+			break
+		}
+	}
+
+	return target_crew_member
+}
+
 try_assign_crew :: proc(
 	simulation_state: ^SimulationState,
 	job_idx, slot_idx: int,
@@ -285,10 +301,14 @@ try_assign_crew :: proc(
 	if job_idx >= len(simulation_state.job_entries) do return false
 	target_job := &simulation_state.job_entries[job_idx]
 
+	crew_member := get_crew_member_by_id(simulation_state, crew_id)
+	if crew_member == nil do return false
+
 	if details, ok := &target_job.details.(types.BuyinJob); ok {
 		if slot_idx < len(details.crew_member_slots) {
-
 			details.crew_member_slots[slot_idx].assigned_crew_member = crew_id
+
+			jobs.deactivate(&crew_member.default_job)
 
 			fmt.printf("Assigned ID %d to Job Slot %d\n", crew_id, slot_idx)
 
@@ -296,6 +316,25 @@ try_assign_crew :: proc(
 		}
 	}
 	return false
+}
+
+clear_crew :: proc(simulation_state: ^SimulationState, job_idx, slot_idx: int) {
+	if job_idx >= len(simulation_state.job_entries) do return
+	target_job := &simulation_state.job_entries[job_idx]
+
+	if details, ok := &target_job.details.(types.BuyinJob); ok {
+		assigned_id := details.crew_member_slots[slot_idx].assigned_crew_member
+		crew_member := get_crew_member_by_id(simulation_state, assigned_id)
+		if crew_member == nil do return
+
+		if slot_idx < len(details.crew_member_slots) {
+			details.crew_member_slots[slot_idx].assigned_crew_member = 0
+
+			jobs.toggle_state(&crew_member.default_job)
+
+			fmt.printf("Cleared ID %d from Job Slot %d\n", crew_member.id, slot_idx)
+		}
+	}
 }
 
 buy_stock :: proc(state: ^SimulationState, company_id: types.CompanyID, amount: int) {
