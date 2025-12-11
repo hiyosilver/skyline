@@ -222,6 +222,9 @@ update_job_card :: proc(
 				ui.label_set_text(ui_slot.status_label, "Empty")
 				ui.label_set_color(ui_slot.status_label, rl.GRAY)
 			}
+
+			is_job_started := job.is_ready || job.is_active
+			ui.button_set_disabled(ui_slot.root_button, is_job_started)
 		}
 
 		ui.label_set_text(

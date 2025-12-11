@@ -59,6 +59,7 @@ init :: proc() -> SimulationState {
 	simulation_state.current_quarter = 1
 	simulation_state.current_year = 1
 	simulation_state.money = 100.0
+	simulation_state.illegitimate_money = 25.0
 	simulation_state.base_tax_rate = 0.15
 	simulation_state.tax_debt_interest_rate = 0.005
 	simulation_state.tick_stats_buffer = make([dynamic]TickStatistics)
