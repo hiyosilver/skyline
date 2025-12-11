@@ -20,11 +20,19 @@ UiTextureId :: enum {
 	Tick,
 }
 
+IconTextureId :: enum {
+	Brawn,
+	Savvy,
+	Tech,
+	Charisma,
+}
+
 exe_path: string
 exe_dir: string
 
 building_textures: map[BuildingTextureId]BuildingTextures
 ui_textures: map[UiTextureId]rl.Texture2D
+icon_textures: map[IconTextureId]rl.Texture2D
 
 load_textures :: proc(asset_dir: string) {
 	building_textures = make(map[BuildingTextureId]BuildingTextures, len(BuildingTextureId))
@@ -70,6 +78,24 @@ load_textures :: proc(asset_dir: string) {
 		ui_textures[id] = tex
 		delete(texture_file_path)
 	}
+
+	for id in IconTextureId {
+		switch id {
+		case .Brawn:
+			texture_file_path = fmt.caprintf("%s/images/ui/icons/brawn.png", asset_dir)
+		case .Savvy:
+			texture_file_path = fmt.caprintf("%s/images/ui/icons/savvy.png", asset_dir)
+		case .Tech:
+			texture_file_path = fmt.caprintf("%s/images/ui/icons/tech.png", asset_dir)
+		case .Charisma:
+			texture_file_path = fmt.caprintf("%s/images/ui/icons/charisma.png", asset_dir)
+		}
+		tex := rl.LoadTexture(texture_file_path)
+		rl.GenTextureMipmaps(&tex)
+		rl.SetTextureFilter(tex, .TRILINEAR)
+		icon_textures[id] = tex
+		delete(texture_file_path)
+	}
 }
 
 @(fini)
@@ -85,4 +111,9 @@ unload_textures :: proc() {
 		rl.UnloadTexture(tex)
 	}
 	delete(ui_textures)
+
+	for _, tex in icon_textures {
+		rl.UnloadTexture(tex)
+	}
+	delete(icon_textures)
 }

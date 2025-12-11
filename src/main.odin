@@ -7,11 +7,14 @@ import "core:math/linalg"
 import "core:os"
 import "core:path/filepath"
 import "crew"
+import "game_ui"
 import "global"
 import "input"
 import "jobs"
+import "simulation"
 import "stocks"
 import "textures"
+import "types"
 import "ui"
 import rl "vendor:raylib"
 
@@ -19,72 +22,50 @@ UPDATE_FPS :: 60
 RENDER_FPS :: 120
 FIXED_DELTA :: 1.0 / f32(UPDATE_FPS)
 
-ChangeOnTick :: enum {
-	Maintained,
-	Increased,
-	Decreased,
-}
-
-GameState :: struct {
-	//Camera
-	camera:                    rl.Camera2D,
-	camera_zoom:               CameraZoom,
-	zoom_delay:                f32,
-
-	//Simulation
-	paused:                    bool,
-	tick_speed:                f32,
-	tick_timer:                f32,
-	current_tick:              int,
-	current_period:            int,
-	current_quarter:           int,
-	current_year:              int,
-
-	//Game data
-	money:                     f64,
-	period_income:             f64,
-	money_change:              ChangeOnTick,
-	illegitimate_money:        f64,
-	illegitimate_money_change: ChangeOnTick,
-	base_tax_rate:             f64,
-	tax_debt:                  f64,
-	tax_debt_interest_rate:    f64,
-	tick_stats_buffer:         [dynamic]TickStatistics,
-	tick_stats_buffer_size:    int,
-	market:                    stocks.Market,
-	stock_portfolio:           stocks.StockPortfolio,
-}
-
-TickStatistics :: struct {
-	current_money:              f64,
-	current_illegitimate_money: f64,
-	income:                     f64,
-	illegitimate_income:        f64,
-	salaries:                   f64,
-	illegitimate_salaries:      f64,
-	taxes:                      f64,
-	tax_debt:                   f64,
-}
-
 CameraZoom :: enum {
 	Default,
 	Close,
 	Far,
 }
 
+DefaultSelectionState :: struct {
+}
+
+AssignCrewMemberSelectionState :: struct {
+	target_job_index:       int,
+	target_crew_slot_index: int,
+}
+
+SelectionState :: union #no_nil {
+	DefaultSelectionState,
+	AssignCrewMemberSelectionState,
+}
+
+GameState :: struct {
+	camera:           rl.Camera2D,
+	camera_zoom:      CameraZoom,
+	zoom_delay:       f32,
+	selection_state:  SelectionState,
+
+	// UI Containers
+	job_view_models:  [dynamic]game_ui.JobCard,
+	crew_view_models: [dynamic]game_ui.CrewMemberCard,
+}
+
 JobEntry :: struct {
-	job:     jobs.Job,
-	display: ui.JobDisplay,
+	job:     types.Job,
+	display: game_ui.JobCard,
 }
 
 CrewEntry :: struct {
-	crew_member: crew.CrewMember,
-	display:     ui.CrewMemberDisplay,
+	crew_member: types.CrewMember,
+	display:     game_ui.CrewMemberCard,
 }
 
 exe_path: string
 exe_dir: string
 
+simulation_state: simulation.SimulationState
 game_state: GameState
 
 money_label_component: ^ui.Component
@@ -93,17 +74,14 @@ tick_bar_component: ^ui.Component
 
 buildings_list: [dynamic]buildings.Building
 
-job_entries: [dynamic]JobEntry
 jobs_box: ^ui.Component
-
-crew_member_entries: [dynamic]CrewEntry
 crew_members_box: ^ui.Component
 
 graph: ^ui.Component
 money_radio_button: ^ui.Component
 illegitimate_money_radio_button: ^ui.Component
 
-stock_window: ui.StockWindow
+stock_window: game_ui.StockWindow
 
 ui_root: ^ui.Component
 
@@ -135,22 +113,6 @@ main :: proc() {
     }
     */
 
-	game_state.tick_speed = 1.0
-	game_state.current_tick = 1
-	game_state.current_period = 1
-	game_state.current_quarter = 1
-	game_state.current_year = 1
-	game_state.money = 100.0
-	game_state.base_tax_rate = 0.15
-	game_state.tax_debt_interest_rate = 0.005
-	game_state.tick_stats_buffer = make([dynamic]TickStatistics)
-	game_state.tick_stats_buffer_size = 30
-	game_state.market = stocks.create_market()
-	for _ in 0 ..< 30 {
-		stocks.update_market_tick(&game_state.market)
-	}
-	game_state.stock_portfolio = stocks.create_stock_portfolio(&game_state.market)
-
 	exe_path = os.args[0]
 	exe_dir = filepath.dir(exe_path)
 	defer delete(exe_dir)
@@ -171,6 +133,8 @@ main :: proc() {
 	textures.load_textures(asset_dir)
 	global.load_fonts(asset_dir)
 	buildings.load_building_data(asset_dir)
+
+	simulation_state = simulation.init()
 
 	game_state.camera.target = {global.SCREEN_WIDTH * 0.5, global.SCREEN_HEIGHT * 0.5}
 	game_state.camera.offset = {global.SCREEN_WIDTH * 0.5, global.SCREEN_HEIGHT * 0.5}
@@ -206,91 +170,67 @@ main :: proc() {
 	}
 	append(&buildings_list, building_atlas_hotel)
 
-	job_entries = make([dynamic]JobEntry)
-
-	jobA := jobs.Job {
+	jobA := types.Job {
 		name                = "Job A",
 		level               = 2,
 		ticks_needed        = 6,
 		income              = 2.5,
 		illegitimate_income = 1.5,
-		details             = jobs.StandardJob{},
+		details             = types.StandardJob{},
 	}
-	append(&job_entries, JobEntry{jobA, ui.make_job_display(&jobA)})
+	append(&simulation_state.job_entries, jobA)
 
-	jobB := jobs.Job {
+	jobB := types.Job {
 		name         = "Job B",
 		level        = 1,
 		ticks_needed = 5,
 		income       = 3.0,
-		details      = jobs.StandardJob{},
+		details      = types.StandardJob{},
 	}
-	append(&job_entries, JobEntry{jobB, ui.make_job_display(&jobB)})
+	append(&simulation_state.job_entries, jobB)
 
 
-	jobC := jobs.Job {
+	jobC := types.Job {
 		name         = "Job C",
 		level        = 1,
 		ticks_needed = 3,
 		income       = 1.5,
-		details      = jobs.StandardJob{},
+		details      = types.StandardJob{},
 	}
-	append(&job_entries, JobEntry{jobC, ui.make_job_display(&jobC)})
+	append(&simulation_state.job_entries, jobC)
 
-	jobD: jobs.Job = jobs.Job {
-		name = "Risky Job",
-		level = 5,
-		ticks_needed = 10,
-		illegitimate_income = 145.0,
-		details = jobs.BuyinJob {
-			buyin_price = 10.0,
-			illegitimate_buyin_price = 10.0,
-			failure_chance = 0.02,
-		},
+	jobD: types.Job = jobs.create_buyin_job()
+	append(&simulation_state.job_entries, jobD)
+
+	jobs_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 16)
+
+	for &job in simulation_state.job_entries {
+		card := game_ui.make_job_card(&job)
+		append(&game_state.job_view_models, card)
+		ui.box_add_child(jobs_box, card.root)
 	}
-	append(&job_entries, JobEntry{jobD, ui.make_job_display(&jobD)})
-
-	jobs_box = ui.make_box(
-		.Vertical,
-		.SpaceBetween,
-		.Fill,
-		16,
-		job_entries[0].display.root,
-		job_entries[1].display.root,
-		job_entries[2].display.root,
-		job_entries[3].display.root,
-	)
 
 	job_panel := ui.make_anchor(.BottomLeft, ui.make_margin(16, 16, 16, 16, jobs_box))
 
-	crew_member_entries = make([dynamic]CrewEntry)
-
 	crew_memberA := crew.generate_crew_member()
-	append(
-		&crew_member_entries,
-		CrewEntry{crew_memberA, ui.make_crew_member_display(&crew_memberA)},
-	)
+	append(&simulation_state.crew_roster, crew_memberA)
 
 	crew_memberB := crew.generate_crew_member()
-	append(
-		&crew_member_entries,
-		CrewEntry{crew_memberB, ui.make_crew_member_display(&crew_memberB)},
-	)
+	append(&simulation_state.crew_roster, crew_memberB)
 
-	crew_members_box = ui.make_box(
-		.Vertical,
-		.SpaceBetween,
-		.Fill,
-		16,
-		crew_member_entries[0].display.root,
-		crew_member_entries[1].display.root,
-	)
+	crew_members_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 16)
+
+	for &cm in simulation_state.crew_roster {
+		card := game_ui.make_crew_member_card(&cm)
+		append(&game_state.crew_view_models, card)
+		ui.box_add_child(crew_members_box, card.root)
+	}
 
 	crew_panel := ui.make_anchor(.BottomRight, ui.make_margin(16, 16, 16, 16, crew_members_box))
 
 	tick_bar_component = ui.make_loading_bar(
 		0,
-		game_state.tick_speed,
+		simulation_state.tick_speed,
 		rl.ORANGE,
 		rl.DARKGRAY,
 		{250.0, 16.0},
@@ -390,7 +330,7 @@ main :: proc() {
 		),
 	)
 
-	stock_window = ui.make_stock_window(&game_state.market)
+	stock_window = game_ui.make_stock_window(&simulation_state.market)
 	stock_window.root.state = .Inactive
 
 	ui_root = ui.make_stack(
@@ -445,6 +385,12 @@ main :: proc() {
 
 			update(&frame_input)
 
+			if simulation_state.current_tick == global.TICKS_PER_PERIOD {
+				ui.loading_bar_set_color(tick_bar_component, rl.RED)
+			} else {
+				ui.loading_bar_set_color(tick_bar_component, rl.ORANGE)
+			}
+
 			for btn in rl.MouseButton {
 				frame_input.mouse_buttons[btn] -= {.ChangedThisFrame}
 			}
@@ -455,6 +401,10 @@ main :: proc() {
 
 			accumulator -= FIXED_DELTA
 			updates += 1
+		}
+
+		if len(game_state.job_view_models) != len(simulation_state.job_entries) {
+			rebuild_job_ui_list()
 		}
 
 		sync_ui_visuals()
@@ -476,11 +426,11 @@ cleanup :: proc() {
 		rl.UnloadImage(building.image_data)
 	}
 	delete(buildings_list)
-	delete(job_entries)
-	delete(crew_member_entries)
-	delete(game_state.tick_stats_buffer)
+	delete(simulation_state.job_entries)
+	delete(simulation_state.crew_roster)
+	delete(simulation_state.tick_stats_buffer)
 
-	stocks.close_market(&game_state.market)
+	stocks.close_market(&simulation_state.market)
 
 	ui.destroy_components_recursive(ui_root)
 }
@@ -490,25 +440,120 @@ process_ui_interactions :: proc(input_data: ^input.RawInput) {
 
 	handle_stock_window_interactions()
 
-	handle_job_display_interactions()
+	handle_job_card_interactions()
 
 	if ui.radio_button_was_activated(money_radio_button) ||
 	   ui.radio_button_was_activated(illegitimate_money_radio_button) {
 		update_graph()
 	}
 
-	for &entry in crew_member_entries {
-		ui.update_crew_member_display(
-			&entry.display,
-			&entry.crew_member,
-			game_state.tick_timer,
-			game_state.tick_speed,
+	state, is_crew_selection_mode := game_state.selection_state.(AssignCrewMemberSelectionState)
+
+	for i in 0 ..< len(simulation_state.crew_roster) {
+		crew_member := &simulation_state.crew_roster[i]
+		if i >= len(game_state.crew_view_models) do break
+		display := &game_state.crew_view_models[i]
+
+		game_ui.update_crew_member_card(
+			display,
+			crew_member,
+			simulation_state.tick_timer,
+			simulation_state.tick_speed,
+			is_crew_selection_mode,
 		)
+
+		if ui.button_was_clicked(display.root) {
+			if is_crew_selection_mode {
+				if simulation.try_assign_crew(
+					&simulation_state,
+					state.target_job_index,
+					state.target_crew_slot_index,
+					crew_member.id,
+				) {
+					game_state.selection_state = DefaultSelectionState{}
+					sync_ui_visuals()
+				}
+			}
+		}
 	}
 
 	if bar, ok := &tick_bar_component.variant.(ui.LoadingBar); ok {
-		bar.current = game_state.tick_timer
-		bar.max = game_state.tick_speed
+		bar.current = simulation_state.tick_timer
+		bar.max = simulation_state.tick_speed
+	}
+}
+
+rebuild_job_ui_list :: proc() {
+	if box, ok := &jobs_box.variant.(ui.BoxContainer); ok {
+		for &job_display in box.children {
+			ui.destroy_components_recursive(job_display)
+		}
+		clear(&box.children)
+	}
+	clear(&game_state.job_view_models)
+
+	for &job in simulation_state.job_entries {
+		card := game_ui.make_job_card(&job)
+		append(&game_state.job_view_models, card)
+		ui.box_add_child(jobs_box, card.root)
+	}
+}
+
+update_graph :: proc() {
+	get_money_from_stats :: proc(data: rawptr, index: int) -> f32 {
+		stats_arr := cast(^[dynamic]simulation.TickStatistics)data
+
+		if index >= len(stats_arr) do return 0
+
+		return f32(stats_arr[index].current_money)
+	}
+
+	get_illegitimate_money_from_stats :: proc(data: rawptr, index: int) -> f32 {
+		stats_arr := cast(^[dynamic]simulation.TickStatistics)data
+
+		if index >= len(stats_arr) do return 0
+
+		return f32(stats_arr[index].current_illegitimate_money)
+	}
+
+	min_val, max_val := math.F64_MAX, math.F64_MIN
+
+	if ui.radio_button_is_selected(money_radio_button) {
+		for &stats in simulation_state.tick_stats_buffer {
+			min_val = min(min_val, stats.current_money)
+			max_val = max(max_val, stats.current_money)
+		}
+
+		range := max_val - min_val
+
+		ui.graph_set_line_color(graph, rl.GREEN)
+
+		ui.graph_set_data(
+			graph,
+			&simulation_state.tick_stats_buffer,
+			len(simulation_state.tick_stats_buffer),
+			get_money_from_stats,
+			f32(min_val - range * 0.1),
+			f32(max_val + range * 0.1),
+		)
+	} else if ui.radio_button_is_selected(illegitimate_money_radio_button) {
+		for &stats in simulation_state.tick_stats_buffer {
+			min_val = min(min_val, stats.current_illegitimate_money)
+			max_val = max(max_val, stats.current_illegitimate_money)
+		}
+
+		range := max_val - min_val
+
+		ui.graph_set_line_color(graph, rl.ORANGE)
+
+		ui.graph_set_data(
+			graph,
+			&simulation_state.tick_stats_buffer,
+			len(simulation_state.tick_stats_buffer),
+			get_illegitimate_money_from_stats,
+			f32(min_val - range * 0.1),
+			f32(max_val + range * 0.1),
+		)
 	}
 }
 
@@ -523,92 +568,71 @@ handle_stock_window_interactions :: proc() {
 	}
 
 	if ui.button_was_clicked(stock_window.buy_button) {
-		stocks.execute_buy_order(
-			&game_state.market,
-			&game_state.stock_portfolio,
-			&game_state.money,
-			stock_window.selected_id,
-			1,
-		)
+		simulation.buy_stock(&simulation_state, stock_window.selected_id, 1)
 	}
 
 	if ui.button_was_clicked(stock_window.sell_button) {
-		stocks.execute_sell_order(
-			&game_state.market,
-			&game_state.stock_portfolio,
-			&game_state.money,
-			&game_state.period_income,
-			stock_window.selected_id,
-			1,
-		)
+		simulation.sell_stock(&simulation_state, stock_window.selected_id, 1)
 	}
 
 	if ui.button_was_clicked(stock_window.buy_all_button) {
 		number_to_buy := int(
-			game_state.money / game_state.market.companies[stock_window.selected_id].current_price,
+			simulation_state.money /
+			simulation_state.market.companies[stock_window.selected_id].current_price,
 		)
-		stocks.execute_buy_order(
-			&game_state.market,
-			&game_state.stock_portfolio,
-			&game_state.money,
-			stock_window.selected_id,
-			number_to_buy,
-		)
+		simulation.buy_stock(&simulation_state, stock_window.selected_id, number_to_buy)
 	}
 
 	if ui.button_was_clicked(stock_window.sell_all_button) {
-		stock_info := &game_state.stock_portfolio.stocks[stock_window.selected_id]
-		stocks.execute_sell_order(
-			&game_state.market,
-			&game_state.stock_portfolio,
-			&game_state.money,
-			&game_state.period_income,
+		stock_info := &simulation_state.stock_portfolio.stocks[stock_window.selected_id]
+		simulation.sell_stock(
+			&simulation_state,
 			stock_window.selected_id,
 			stock_info.quantity_owned,
 		)
 	}
 }
 
-handle_job_display_interactions :: proc() {
-	for &entry, i in job_entries {
-		#partial switch &details in entry.job.details {
-		case jobs.BuyinJob:
+handle_job_card_interactions :: proc() {
+	for i in 0 ..< len(simulation_state.job_entries) {
+		job := &simulation_state.job_entries[i]
+		if i >= len(game_state.job_view_models) do break
+		display := &game_state.job_view_models[i]
+
+		#partial switch &details in job.details {
+		case types.BuyinJob:
 			has_sufficient_funds :=
-				game_state.money >= details.buyin_price &&
-				game_state.illegitimate_money >= details.illegitimate_buyin_price
+				simulation_state.money >= details.buyin_price &&
+				simulation_state.illegitimate_money >= details.illegitimate_buyin_price
 			ui.button_set_disabled(
-				entry.display.start_button,
-				!has_sufficient_funds && !entry.job.is_ready && !entry.job.is_ready,
+				display.start_button,
+				!has_sufficient_funds && !job.is_ready && !job.is_ready,
 			)
+
+			for slot_display, j in display.crew_slots {
+				if ui.button_was_clicked(slot_display.root_button) {
+					if details.crew_member_slots[j].assigned_crew_member != 0 {
+						details.crew_member_slots[j].assigned_crew_member = 0
+					} else {
+						game_state.selection_state = AssignCrewMemberSelectionState {
+							target_job_index       = i,
+							target_crew_slot_index = j,
+						}
+					}
+				}
+			}
 		}
 
-		if ui.button_was_clicked(entry.display.start_button) {
-			toggle_job_state(&entry, i)
+		if ui.button_was_clicked(display.start_button) {
+			simulation.interact_toggle_job(&simulation_state, i)
 			break
-		}
-	}
-}
-
-toggle_job_state :: proc(entry: ^JobEntry, index: int) {
-	job_active := jobs.toggle_state(&entry.job)
-	if job_active {
-		#partial switch &d in entry.job.details {
-		case jobs.BuyinJob:
-			game_state.money -= d.buyin_price
-			game_state.illegitimate_money -= d.illegitimate_buyin_price
-		}
-
-		for &other_entry, j in job_entries {
-			if index == j do continue
-
-			jobs.deactivate(&other_entry.job)
 		}
 	}
 }
 
 update :: proc(input_data: ^input.RawInput) {
 	if input.is_key_released_this_frame(.SPACE, input_data) {
-		game_state.paused = !game_state.paused
+		simulation_state.paused = !simulation_state.paused
 	}
 
 	if input.is_key_released_this_frame(.S, input_data) {
@@ -619,11 +643,11 @@ update :: proc(input_data: ^input.RawInput) {
 		}
 	}
 
-	if !game_state.paused {
-		game_state.tick_timer += FIXED_DELTA
-		if game_state.tick_timer >= game_state.tick_speed {
-			game_state.tick_timer -= game_state.tick_speed
-			tick()
+	if !simulation_state.paused {
+		simulation_state.tick_timer += FIXED_DELTA
+		if simulation_state.tick_timer >= simulation_state.tick_speed {
+			simulation_state.tick_timer -= simulation_state.tick_speed
+			simulation.tick(&simulation_state)
 		}
 	}
 
@@ -687,273 +711,55 @@ update :: proc(input_data: ^input.RawInput) {
 }
 
 sync_ui_visuals :: proc() {
-	ui.update_stock_window(&stock_window, &game_state.market, &game_state.stock_portfolio)
+	update_graph()
 
-	for &entry in job_entries {
-		ui.update_job_display(
-			&entry.display,
-			&entry.job,
-			game_state.tick_timer,
-			game_state.tick_speed,
+	game_ui.update_stock_window(
+		&stock_window,
+		&simulation_state.market,
+		&simulation_state.stock_portfolio,
+	)
+
+	crew_lookup := make(map[types.CrewMemberID]^types.CrewMember, context.temp_allocator)
+
+	for &crew_member in simulation_state.crew_roster {
+		crew_lookup[crew_member.id] = &crew_member
+	}
+
+	for i in 0 ..< len(simulation_state.job_entries) {
+		data := &simulation_state.job_entries[i]
+		view := &game_state.job_view_models[i]
+
+		game_ui.update_job_card(
+			view,
+			data,
+			simulation_state.tick_timer,
+			simulation_state.tick_speed,
+			crew_lookup,
 		)
 	}
 
-	if game_state.tax_debt > 0.0 {
+	if simulation_state.tax_debt > 0.0 {
 		ui.label_set_text(
 			money_label_component,
 			fmt.tprintf(
-				"%s $ (-%s $)",
-				global.format_float_thousands(game_state.money, 2),
-				global.format_float_thousands(game_state.tax_debt, 2),
+				"$%s (-$%s)",
+				global.format_float_thousands(simulation_state.money, 2),
+				global.format_float_thousands(simulation_state.tax_debt, 2),
 			),
 		)
 	} else {
 		ui.label_set_text(
 			money_label_component,
-			fmt.tprintf("%s $", global.format_float_thousands(game_state.money, 2)),
+			fmt.tprintf("$%s", global.format_float_thousands(simulation_state.money, 2)),
 		)
 	}
 	ui.label_set_text(
 		illegitimate_money_label_component,
-		fmt.tprintf("%s ₴", global.format_float_thousands(game_state.illegitimate_money, 2)),
+		fmt.tprintf(
+			"₴%s",
+			global.format_float_thousands(simulation_state.illegitimate_money, 2),
+		),
 	)
-}
-
-tick :: proc() {
-	tick_stats: TickStatistics
-
-	prev_money := game_state.money
-	prev_illegitimate_money := game_state.illegitimate_money
-
-	for &entry, i in job_entries {
-		job_result := jobs.tick(&entry.job)
-		if entry.job.is_ready {
-			entry.job.is_active = true
-		}
-		if job_result == .Finished {
-			game_state.money += entry.job.income
-			game_state.period_income += entry.job.income
-			tick_stats.income += entry.job.income
-			game_state.illegitimate_money += entry.job.illegitimate_income
-			tick_stats.illegitimate_income += entry.job.illegitimate_income
-			#partial switch &d in entry.job.details {
-			case jobs.BuyinJob:
-				jobs.deactivate(&entry.job)
-				remove_job(i)
-			}
-		} else if job_result == .Failed {
-			jobs.deactivate(&entry.job)
-			remove_job(i)
-		}
-	}
-
-	for &entry in crew_member_entries {
-		job_result := jobs.tick(&entry.crew_member.default_job)
-		if entry.crew_member.default_job.is_ready {
-			entry.crew_member.default_job.is_active = true
-		}
-		if job_result == .Finished {
-			game_state.money += entry.crew_member.default_job.income
-			game_state.period_income += entry.crew_member.default_job.income
-			tick_stats.income += entry.crew_member.default_job.income
-			game_state.illegitimate_money += entry.crew_member.default_job.illegitimate_income
-			tick_stats.illegitimate_income += entry.crew_member.default_job.illegitimate_income
-		} else if job_result == .Failed {
-			jobs.deactivate(&entry.crew_member.default_job)
-		}
-	}
-
-	game_state.current_tick += 1
-	stocks.update_market_tick(&game_state.market)
-	if game_state.current_tick == global.TICKS_PER_PERIOD {
-		ui.loading_bar_set_color(tick_bar_component, rl.RED)
-	} else if game_state.current_tick > global.TICKS_PER_PERIOD {
-		game_state.current_tick = 1
-
-		ui.loading_bar_set_color(tick_bar_component, rl.ORANGE)
-
-		fmt.println("Update market period!")
-		calculate_period_end(&tick_stats)
-		game_state.current_period += 1
-
-		if (game_state.current_period - 1) % global.PERIODS_PER_QUARTER == 0 {
-			game_state.current_period = 1
-
-			fmt.println("Update market quarter!")
-			stocks.update_market_quarter(&game_state.market)
-			game_state.current_quarter += 1
-		}
-		if game_state.current_quarter > global.QUARTERS_PER_YEAR {
-			game_state.current_quarter = 1
-			fmt.println("Update market year!")
-			stocks.update_market_year(&game_state.market)
-			game_state.current_year += 1
-		}
-	}
-
-	switch {
-	case game_state.money == prev_money:
-		game_state.money_change = .Maintained
-	case game_state.money < prev_money:
-		game_state.money_change = .Decreased
-	case game_state.money > prev_money:
-		game_state.money_change = .Increased
-	}
-
-	switch {
-	case game_state.illegitimate_money == prev_illegitimate_money:
-		game_state.illegitimate_money_change = .Maintained
-	case game_state.illegitimate_money < prev_illegitimate_money:
-		game_state.illegitimate_money_change = .Decreased
-	case game_state.illegitimate_money > prev_illegitimate_money:
-		game_state.illegitimate_money_change = .Increased
-	}
-
-	tick_stats.current_money = game_state.money
-	tick_stats.current_illegitimate_money = game_state.illegitimate_money
-
-	append(&game_state.tick_stats_buffer, tick_stats)
-	if len(game_state.tick_stats_buffer) > game_state.tick_stats_buffer_size {
-		ordered_remove(&game_state.tick_stats_buffer, 0)
-	}
-
-	update_graph()
-}
-
-update_graph :: proc() {
-	get_money_from_stats :: proc(data: rawptr, index: int) -> f32 {
-		stats_arr := cast(^[dynamic]TickStatistics)data
-
-		if index >= len(stats_arr) do return 0
-
-		return f32(stats_arr[index].current_money)
-	}
-
-	get_illegitimate_money_from_stats :: proc(data: rawptr, index: int) -> f32 {
-		stats_arr := cast(^[dynamic]TickStatistics)data
-
-		if index >= len(stats_arr) do return 0
-
-		return f32(stats_arr[index].current_illegitimate_money)
-	}
-
-	min_val, max_val := math.F64_MAX, math.F64_MIN
-
-	if ui.radio_button_is_selected(money_radio_button) {
-		for &stats in game_state.tick_stats_buffer {
-			min_val = min(min_val, stats.current_money)
-			max_val = max(max_val, stats.current_money)
-		}
-
-		range := max_val - min_val
-
-		ui.graph_set_line_color(graph, rl.GREEN)
-
-		ui.graph_set_data(
-			graph,
-			&game_state.tick_stats_buffer,
-			len(game_state.tick_stats_buffer),
-			get_money_from_stats,
-			f32(min_val - range * 0.1),
-			f32(max_val + range * 0.1),
-		)
-	} else if ui.radio_button_is_selected(illegitimate_money_radio_button) {
-		for &stats in game_state.tick_stats_buffer {
-			min_val = min(min_val, stats.current_illegitimate_money)
-			max_val = max(max_val, stats.current_illegitimate_money)
-		}
-
-		range := max_val - min_val
-
-		ui.graph_set_line_color(graph, rl.ORANGE)
-
-		ui.graph_set_data(
-			graph,
-			&game_state.tick_stats_buffer,
-			len(game_state.tick_stats_buffer),
-			get_illegitimate_money_from_stats,
-			f32(min_val - range * 0.1),
-			f32(max_val + range * 0.1),
-		)
-	}
-}
-
-calculate_period_end :: proc(tick_stats: ^TickStatistics) {
-	//Calculate and pay salaries
-	salaries, salaries_illegitimate: f64
-	#reverse for &entry, i in crew_member_entries {
-		quit := false
-		if game_state.money >= entry.crew_member.base_salary {
-			game_state.money -= entry.crew_member.base_salary
-			salaries += entry.crew_member.base_salary
-		} else {
-			game_state.money = 0.0
-			quit = true
-		}
-
-		if game_state.illegitimate_money >= entry.crew_member.base_salary_illegitimate {
-			game_state.illegitimate_money -= entry.crew_member.base_salary_illegitimate
-			salaries_illegitimate += entry.crew_member.base_salary_illegitimate
-		} else {
-			game_state.illegitimate_money = 0.0
-			quit = true
-		}
-
-		if quit do remove_crew_member(i)
-	}
-
-	tick_stats.salaries = salaries
-	tick_stats.illegitimate_salaries = salaries_illegitimate
-
-	//Calculate tax debt interest
-	tax_debt_interest := game_state.tax_debt * game_state.tax_debt_interest_rate
-
-	//Accumulate tax debt
-	game_state.tax_debt += tax_debt_interest
-
-	//Try to pay tax debt
-	if game_state.tax_debt > 0.0 {
-		if game_state.money >= game_state.tax_debt {
-			game_state.money -= game_state.tax_debt
-			game_state.tax_debt = 0.0
-		} else {
-			game_state.tax_debt -= game_state.money
-			game_state.money = 0.0
-		}
-	}
-
-	//Calculate tax
-	tax := game_state.period_income * game_state.base_tax_rate
-	tick_stats.taxes = tax
-
-	//Try to pay tax
-	if tax > 0.0 {
-		if game_state.money >= tax {
-			game_state.money -= tax
-		} else {
-			game_state.tax_debt += tax - game_state.money
-			game_state.money = 0
-		}
-	}
-
-	tick_stats.tax_debt = game_state.tax_debt
-	game_state.period_income = 0.0
-
-	stocks.update_market_period(&game_state.market)
-}
-
-remove_crew_member :: proc(entry_index: int) {
-	entry := crew_member_entries[entry_index]
-	ui.box_remove_child(crew_members_box, entry.display.root)
-	ui.destroy_components_recursive(entry.display.root)
-	ordered_remove(&crew_member_entries, entry_index)
-}
-
-remove_job :: proc(entry_index: int) {
-	entry := job_entries[entry_index]
-	ui.box_remove_child(jobs_box, entry.display.root)
-	ui.destroy_components_recursive(entry.display.root)
-	ordered_remove(&job_entries, entry_index)
 }
 
 draw :: proc(alpha: f32) {
@@ -1005,7 +811,7 @@ draw :: proc(alpha: f32) {
 		16,
 	}
 
-	circle_progress := 1.0 - (game_state.tick_timer / game_state.tick_speed)
+	circle_progress := 1.0 - (simulation_state.tick_timer / simulation_state.tick_speed)
 	angle := (360 * circle_progress) - 90
 
 	rl.DrawLineEx(
@@ -1020,7 +826,7 @@ draw :: proc(alpha: f32) {
 		rl.DrawCircleV(
 			origin,
 			circle_radius,
-			(i + 1) == game_state.current_tick ? rl.RAYWHITE : rl.DARKGRAY,
+			(i + 1) == simulation_state.current_tick ? rl.RAYWHITE : rl.DARKGRAY,
 		)
 		rl.DrawRing(
 			origin,
@@ -1031,7 +837,7 @@ draw :: proc(alpha: f32) {
 			16,
 			base_color,
 		)
-		if (i + 1) < game_state.current_tick {
+		if (i + 1) < simulation_state.current_tick {
 			rl.DrawCircleGradient(
 				i32(origin.x),
 				i32(origin.y),
@@ -1040,7 +846,7 @@ draw :: proc(alpha: f32) {
 				base_color,
 			)
 		}
-		if (i + 1) == game_state.current_tick {
+		if (i + 1) == simulation_state.current_tick {
 			rl.DrawCircleGradient(
 				i32(origin.x),
 				i32(origin.y),

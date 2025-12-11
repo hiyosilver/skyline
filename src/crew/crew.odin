@@ -1,6 +1,6 @@
 package crew
 
-import "../jobs"
+import "../types"
 import "core:math/rand"
 
 nicknames := [58]string {
@@ -65,19 +65,17 @@ nicknames := [58]string {
 }
 current_nickname_index := rand.int_max(len(nicknames))
 
-CrewMember :: struct {
-	nickname:                              string,
-	base_salary, base_salary_illegitimate: f64,
-	default_job:                           jobs.Job,
-}
-
 @(init)
 setup :: proc() {
 	rand.shuffle(nicknames[:])
 }
 
-generate_crew_member :: proc() -> CrewMember {
-	crew_member := CrewMember {
+generate_crew_member :: proc() -> types.CrewMember {
+	@(static) id: types.CrewMemberID = 1
+	defer id += 1
+
+	crew_member := types.CrewMember {
+		id = id,
 		nickname = nicknames[current_nickname_index],
 		base_salary = 0.5,
 		base_salary_illegitimate = 0.5,
@@ -87,8 +85,12 @@ generate_crew_member :: proc() -> CrewMember {
 			is_ready = true,
 			ticks_needed = 4,
 			illegitimate_income = 2.0,
-			details = jobs.StandardJob{},
+			details = types.StandardJob{},
 		},
+		brawn = 1,
+		savvy = 1,
+		tech = 1,
+		charisma = 1,
 	}
 
 	current_nickname_index += 1

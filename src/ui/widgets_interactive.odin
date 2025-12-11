@@ -67,6 +67,16 @@ button_set_disabled :: proc(component: ^Component, disabled: bool) {
 	}
 }
 
+button_set_color :: proc(component: ^Component, color: rl.Color) {
+	if component == nil do return
+
+	if btn, ok := &component.variant.(SimpleButton); ok {
+		btn.color_default = color
+		btn.color_hovered = rl.ColorBrightness(color, 0.2)
+		btn.color_pressed = rl.ColorBrightness(color, -0.2)
+	}
+}
+
 RadioButton :: struct {
 	selected:                bool,
 	state:                   SimpleButtonState,

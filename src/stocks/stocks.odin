@@ -1,6 +1,7 @@
 package stocks
 
 import "../global"
+import "../types"
 import "core:math"
 import "core:math/rand"
 import rl "vendor:raylib"
@@ -87,10 +88,8 @@ get_rating_data :: proc(rating: CreditRating) -> (label: string, spread: f64, co
 	return "?", 0.0, rl.WHITE
 }
 
-CompanyID :: distinct int
-
 Company :: struct {
-	id:                                                         CompanyID,
+	id:                                                         types.CompanyID,
 	name, ticker_symbol, description:                           string,
 	sector:                                                     CompanySector,
 	years_active:                                               int,
@@ -131,7 +130,7 @@ Arch_FinancialAnchor :: CompanyArchetype{4.00, 1.0, 0.20, 0.03, 80, 0.03}
 Arch_Distressed :: CompanyArchetype{-2.00, 0.6, 0.45, -0.05, 15, 0.00}
 
 create_company :: proc(
-	id: CompanyID,
+	id: types.CompanyID,
 	name, ticker_symbol, description: string,
 	sector: CompanySector,
 	years_active: int,
@@ -205,11 +204,11 @@ apply_fuzz :: proc(val: f64, variance: f64) -> f64 {
 Market :: struct {
 	global_base_rate:         f64,
 	market_cap_start_of_year: f64,
-	companies:                map[CompanyID]Company,
+	companies:                map[types.CompanyID]Company,
 }
 
 create_market :: proc() -> Market {
-	companies := make(map[CompanyID]Company)
+	companies := make(map[types.CompanyID]Company)
 
 	//Communication Services
 	companies[101] = create_company(
@@ -822,17 +821,17 @@ close_market :: proc(market: ^Market) {
 }
 
 StockInfo :: struct {
-	company_id:     CompanyID,
+	company_id:     types.CompanyID,
 	quantity_owned: int,
 	average_cost:   f64,
 }
 
 StockPortfolio :: struct {
-	stocks: map[CompanyID]StockInfo,
+	stocks: map[types.CompanyID]StockInfo,
 }
 
 create_stock_portfolio :: proc(market: ^Market) -> StockPortfolio {
-	stocks_data := make(map[CompanyID]StockInfo)
+	stocks_data := make(map[types.CompanyID]StockInfo)
 	for company_id, _ in market.companies {
 		stocks_data[company_id] = StockInfo {
 			company_id = company_id,
@@ -859,7 +858,7 @@ execute_buy_order :: proc(
 	market: ^Market,
 	portfolio: ^StockPortfolio,
 	money: ^f64,
-	company_id: CompanyID,
+	company_id: types.CompanyID,
 	amount: int,
 ) -> TradeResult {
 	company, ok := &market.companies[company_id]
@@ -891,7 +890,7 @@ execute_sell_order :: proc(
 	market: ^Market,
 	portfolio: ^StockPortfolio,
 	money, period_income: ^f64,
-	company_id: CompanyID,
+	company_id: types.CompanyID,
 	amount: int,
 ) -> TradeResult {
 	company, ok := market.companies[company_id]
