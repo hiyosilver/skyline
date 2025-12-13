@@ -79,32 +79,39 @@ tick :: proc(simulation_state: ^SimulationState) {
 	prev_money := simulation_state.money
 	prev_illegitimate_money := simulation_state.illegitimate_money
 
-	#reverse for &job, i in simulation_state.job_entries {
-		job_result := jobs.tick(&job)
+	crew_lookup := generate_crew_lookup(simulation_state)
+
+	#reverse for &job in simulation_state.job_entries {
+		final_income, final_illegitimate_income, final_failure_chance := jobs.calculate_job_values(
+			&job,
+			crew_lookup,
+		)
+
+		job_result := jobs.tick(&job, crew_lookup, final_failure_chance)
 		if job.is_ready {
 			job.is_active = true
 		}
 		if job_result == .Finished {
-			simulation_state.money += job.income
-			simulation_state.period_income += job.income
-			simulation_state.illegitimate_money += job.illegitimate_income
+			simulation_state.money += final_income
+			simulation_state.period_income += final_income
+			simulation_state.illegitimate_money += final_illegitimate_income
 
-			tick_stats.income += job.income
-			tick_stats.illegitimate_income += job.illegitimate_income
+			tick_stats.income += final_income
+			tick_stats.illegitimate_income += final_illegitimate_income
 
 			#partial switch &d in job.details {
 			case types.BuyinJob:
 				jobs.deactivate(&job)
-				remove_job(simulation_state, i)
+				remove_job(simulation_state, job.id)
 			}
 		} else if job_result == .Failed {
 			jobs.deactivate(&job)
-			remove_job(simulation_state, i)
+			remove_job(simulation_state, job.id)
 		}
 	}
 
 	for &crew_member in simulation_state.crew_roster {
-		job_result := jobs.tick(&crew_member.default_job)
+		job_result := jobs.tick(&crew_member.default_job, crew_lookup, 0.0)
 		if crew_member.default_job.is_ready {
 			crew_member.default_job.is_active = true
 		}
@@ -235,6 +242,28 @@ calculate_period_end :: proc(simulation_state: ^SimulationState, tick_stats: ^Ti
 	stocks.update_market_period(&simulation_state.market)
 }
 
+generate_job_lookup :: proc(simulation_state: ^SimulationState) -> map[types.JobID]^types.Job {
+	job_lookup := make(map[types.JobID]^types.Job, context.temp_allocator)
+
+	for &job in simulation_state.job_entries {
+		job_lookup[job.id] = &job
+	}
+
+	return job_lookup
+}
+
+generate_crew_lookup :: proc(
+	simulation_state: ^SimulationState,
+) -> map[types.CrewMemberID]^types.CrewMember {
+	crew_lookup := make(map[types.CrewMemberID]^types.CrewMember, context.temp_allocator)
+
+	for &crew_member in simulation_state.crew_roster {
+		crew_lookup[crew_member.id] = &crew_member
+	}
+
+	return crew_lookup
+}
+
 remove_crew_member :: proc(
 	simulation_state: ^SimulationState,
 	crew_member_id: types.CrewMemberID,
@@ -247,8 +276,19 @@ remove_crew_member :: proc(
 	}
 }
 
-remove_job :: proc(simulation_state: ^SimulationState, entry_index: int) {
-	ordered_remove(&simulation_state.job_entries, entry_index)
+remove_job :: proc(simulation_state: ^SimulationState, job_id: types.JobID) {
+	#reverse for &job, i in simulation_state.job_entries {
+		if job.id != job_id do continue
+
+		#partial switch &details in job.details {
+		case types.BuyinJob:
+			for slot_index in 0 ..< len(details.crew_member_slots) {
+				clear_crew(simulation_state, job.id, slot_index)
+			}
+		}
+
+		ordered_remove(&simulation_state.job_entries, i)
+	}
 }
 
 interact_toggle_job :: proc(simulation_state: ^SimulationState, job_index: int) {

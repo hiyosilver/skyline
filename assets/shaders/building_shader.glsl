@@ -6,7 +6,6 @@ in vec4 fragColor;
 
 // Input uniform values
 uniform sampler2D texture0;
-uniform sampler2D normalMap;
 
 uniform vec2 textureSize;
 uniform float time;

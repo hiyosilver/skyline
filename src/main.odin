@@ -153,7 +153,7 @@ main :: proc() {
 		texture_id     = .SkyscraperCrownPlaza,
 		texture_offset = {96.0, 1088.0},
 		image_data     = rl.LoadImageFromTexture(
-			textures.building_textures[.SkyscraperCrownPlaza].albedo,
+			textures.building_textures[.SkyscraperCrownPlaza],
 		),
 		name           = "Crown Plaza Tower",
 	}
@@ -164,25 +164,25 @@ main :: proc() {
 		texture_id     = .SkyscraperAtlasHotel,
 		texture_offset = {77.0, 480.0},
 		image_data     = rl.LoadImageFromTexture(
-			textures.building_textures[.SkyscraperAtlasHotel].albedo,
+			textures.building_textures[.SkyscraperAtlasHotel],
 		),
 		name           = "Atlas Hotel",
 	}
 	append(&buildings_list, building_atlas_hotel)
 
-	jobA := jobs.create_job("Job A", 2, 6, 2.5, 1.5)
+	jobA := jobs.create_job("Construction", 2, 6, 2.5, 1.5)
 	append(&simulation_state.job_entries, jobA)
 
-	jobB := jobs.create_job("Job B", 1, 5, 3.0, 0.0)
+	jobB := jobs.create_job("Waiting", 1, 5, 3.0, 0.0)
 	append(&simulation_state.job_entries, jobB)
 
-	jobC := jobs.create_job("Job C", 1, 3, 1.5, 0.0)
+	jobC := jobs.create_job("Fast food", 1, 3, 1.5, 0.0)
 	append(&simulation_state.job_entries, jobC)
 
-	jobD := jobs.create_job("Risky Job", 5, 10, 0.0, 145.0, true)
+	jobD := jobs.create_job("Collect debt", 5, 10, 0.0, 145.0, true)
 	append(&simulation_state.job_entries, jobD)
 
-	jobs_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 16)
+	jobs_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 8)
 
 	for &job in simulation_state.job_entries {
 		card := game_ui.make_job_card(&job)
@@ -190,7 +190,13 @@ main :: proc() {
 		ui.box_add_child(jobs_box, card.root)
 	}
 
-	job_panel := ui.make_anchor(.BottomLeft, ui.make_margin(16, 16, 16, 16, jobs_box))
+	job_scroll_container := ui.make_scroll_container(
+		{0.0, global.SCREEN_HEIGHT * 0.5},
+		jobs_box,
+		scroll_bar_position = .Left,
+	)
+
+	job_panel := ui.make_anchor(.BottomLeft, ui.make_margin(16, 16, 16, 16, job_scroll_container))
 
 	crew_memberA := crew.generate_crew_member()
 	append(&simulation_state.crew_roster, crew_memberA)
@@ -198,7 +204,10 @@ main :: proc() {
 	crew_memberB := crew.generate_crew_member()
 	append(&simulation_state.crew_roster, crew_memberB)
 
-	crew_members_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 16)
+	crew_memberC := crew.generate_crew_member()
+	append(&simulation_state.crew_roster, crew_memberC)
+
+	crew_members_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 8)
 
 	for &cm in simulation_state.crew_roster {
 		card := game_ui.make_crew_member_card(&cm)
@@ -590,14 +599,15 @@ handle_crew_member_card_interactions :: proc() {
 		if i >= len(game_state.crew_view_models) do break
 		display := &game_state.crew_view_models[i]
 
-		is_assigned_to_job := crew.is_assigned_to_job(crew_member)
+		job_lookup := simulation.generate_job_lookup(&simulation_state)
 
 		game_ui.update_crew_member_card(
 			display,
 			crew_member,
 			simulation_state.tick_timer,
 			simulation_state.tick_speed,
-			is_crew_selection_mode && !is_assigned_to_job,
+			is_crew_selection_mode,
+			job_lookup,
 		)
 
 		if ui.button_was_clicked(display.root) {
@@ -705,11 +715,7 @@ sync_ui_visuals :: proc() {
 		&simulation_state.stock_portfolio,
 	)
 
-	crew_lookup := make(map[types.CrewMemberID]^types.CrewMember, context.temp_allocator)
-
-	for &crew_member in simulation_state.crew_roster {
-		crew_lookup[crew_member.id] = &crew_member
-	}
+	crew_lookup := simulation.generate_crew_lookup(&simulation_state)
 
 	for i in 0 ..< len(simulation_state.job_entries) {
 		data := &simulation_state.job_entries[i]
@@ -761,32 +767,6 @@ draw :: proc(alpha: f32) {
 	}
 
 	rl.EndMode2D()
-
-	/*
-    money_string := fmt.ctprintf("Money: %s $", global.format_float_thousands(game_state.money, 2))
-    money_string_width := rl.MeasureTextEx(global.font_large, money_string, 28.0, 2.0).x
-    illegitimate_money_string := fmt.ctprintf("Illegitimate money: %s ₴", global.format_float_thousands(game_state.illegitimate_money, 2))
-    illegitimate_money_string_width := rl.MeasureTextEx(global.font_large_italic, illegitimate_money_string, 28.0, 2.0).x
-
-    rl.DrawTextPro(global.font_large, money_string, {16.0, 16.0}, {0.0, 0.0}, 0.0, 28.0, 2.0, rl.DARKGRAY)
-    switch game_state.money_change {
-    case .Maintained:
-        rl.DrawTextPro(global.font_large, "→", {24.0 + money_string_width, 16.0}, {0.0, 0.0}, 0.0, 28.0, 2.0, rl.DARKGRAY)
-    case .Increased:
-        rl.DrawTextPro(global.font_large, "↗", {24.0 + money_string_width, 16.0}, {0.0, 0.0}, 0.0, 28.0, 2.0, rl.DARKGREEN)
-    case .Decreased:
-        rl.DrawTextPro(global.font_large, "↘", {24.0 + money_string_width, 16.0}, {0.0, 0.0}, 0.0, 28.0, 2.0, rl.RED)
-    }
-    rl.DrawTextPro(global.font_large_italic, illegitimate_money_string, {16.0, 48.0}, {0.0, 0.0}, 0.0, 28.0, 2.0, rl.DARKGRAY)
-    switch game_state.illegitimate_money_change {
-    case .Maintained:
-        rl.DrawTextPro(global.font_large_italic, "→", {24.0 + illegitimate_money_string_width, 48.0}, {0.0, 0.0}, 0.0, 28.0, 2.0, rl.DARKGRAY)
-    case .Increased:
-        rl.DrawTextPro(global.font_large_italic, "↗", {24.0 + illegitimate_money_string_width, 48.0}, {0.0, 0.0}, 0.0, 28.0, 2.0, rl.DARKGREEN)
-    case .Decreased:
-        rl.DrawTextPro(global.font_large_italic, "↘", {24.0 + illegitimate_money_string_width, 48.0}, {0.0, 0.0}, 0.0, 28.0, 2.0, rl.RED)
-    }
-    */
 
 	circle_radius: f32 = 12.0
 	ring_width: f32 = 4.0

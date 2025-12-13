@@ -22,6 +22,14 @@ make_panel :: proc(color: rl.Color, min_size: rl.Vector2, child: ^Component = ni
 	return c
 }
 
+panel_set_color :: proc(component: ^Component, color: rl.Color) {
+	if component == nil do return
+
+	if panel, ok := &component.variant.(Panel); ok {
+		panel.color = color
+	}
+}
+
 TexturePanel :: struct {
 	child:      ^Component,
 	texture:    rl.Texture2D,

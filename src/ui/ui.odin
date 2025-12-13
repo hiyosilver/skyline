@@ -98,10 +98,10 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 		desired_size.x += f32(v.margin_left + v.margin_right)
 		desired_size.y += f32(v.margin_top + v.margin_bottom)
 	case ScrollContainer:
-		if v.child != nil {
-			_ = get_desired_size(v.child)
-		}
-		desired_size = component.min_size
+		child_desired_size := get_desired_size(v.child)
+
+		desired_size.x = max(component.min_size.x, child_desired_size.x) + v.scroll_bar_width
+		desired_size.y = component.min_size.y
 	case Panel:
 		desired_size = get_desired_size(v.child)
 		desired_size = {
@@ -339,12 +339,20 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 
 			v.scroll_y = math.clamp(v.scroll_y, 0.0, v.scrollable_range)
 
+			scroll_bar_buffer := (v.content_height > v.viewport_height ? v.scroll_bar_width : 0.0)
+			scroll_bar_buffer += 2.0
+
 			child_full_rect := rl.Rectangle {
 				actual_rect.x,
-				actual_rect.y - v.scroll_y,
-				actual_rect.width - (v.content_height > v.viewport_height ? 16.0 : 0.0),
+				actual_rect.y - math.floor(v.scroll_y),
+				actual_rect.width - scroll_bar_buffer,
 				v.child.desired_size.y,
 			}
+
+			if v.scroll_bar_position == .Left {
+				child_full_rect.x += scroll_bar_buffer
+			}
+
 			arrange_components(v.child, child_full_rect)
 		}
 
@@ -452,12 +460,28 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 		}
 
 		if v.scrollable_range > 0.0 {
-			scroll_bar_rect := rl.Rectangle {
-				component.position.x + component.size.x - 16.0,
-				component.position.y,
-				16.0,
-				component.size.y,
+			scroll_bar_buffer := (v.content_height > v.viewport_height ? v.scroll_bar_width : 0.0)
+			scroll_bar_buffer += 2.0
+
+			scroll_bar_rect: rl.Rectangle
+
+			switch v.scroll_bar_position {
+			case .Right:
+				scroll_bar_rect = rl.Rectangle {
+					component.position.x + component.size.x - scroll_bar_buffer,
+					component.position.y,
+					scroll_bar_buffer,
+					component.size.y,
+				}
+			case .Left:
+				scroll_bar_rect = rl.Rectangle {
+					component.position.x,
+					component.position.y,
+					scroll_bar_buffer,
+					component.size.y,
+				}
 			}
+
 			scroll_bar_is_hovered := rl.CheckCollisionPointRec(mouse_pos, scroll_bar_rect)
 			if scroll_bar_is_hovered {
 				captured = true
@@ -612,25 +636,7 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 	case ScrollContainer:
 		if v.child != nil {
 			if v.scrollable_range > 0.0 {
-				rl.DrawCircleV(
-					{component.position.x + component.size.x - 7.0, component.position.y + 7.0},
-					7.0,
-					rl.DARKGRAY,
-				)
-				rl.DrawCircleV(
-					{
-						component.position.x + component.size.x - 7.0,
-						component.position.y + component.size.y - 7.0,
-					},
-					7.0,
-					rl.DARKGRAY,
-				)
-
-				rl.DrawRectangleV(
-					{component.position.x + component.size.x - 14.0, component.position.y + 7.0},
-					{14.0, component.size.y - 14.0},
-					rl.DARKGRAY,
-				)
+				scroll_bar_half_width := v.scroll_bar_width * 0.5
 
 				total_content_height := v.viewport_height + v.scrollable_range
 
@@ -654,32 +660,110 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 
 				scroll_bar_color := v.scroll_bar_dragging ? rl.WHITE : rl.RAYWHITE
 
-				rl.DrawCircleV(
-					{
-						component.position.x + component.size.x - 7.0,
-						component.position.y + scroll_knob_start + 7.0,
-					},
-					7.0,
-					scroll_bar_color,
-				)
+				switch v.scroll_bar_position {
+				case .Right:
+					rl.DrawCircleV(
+						{
+							component.position.x + component.size.x - scroll_bar_half_width,
+							component.position.y + scroll_bar_half_width,
+						},
+						scroll_bar_half_width,
+						rl.DARKGRAY,
+					)
+					rl.DrawCircleV(
+						{
+							component.position.x + component.size.x - scroll_bar_half_width,
+							component.position.y + component.size.y - scroll_bar_half_width,
+						},
+						scroll_bar_half_width,
+						rl.DARKGRAY,
+					)
 
-				rl.DrawCircleV(
-					{
-						component.position.x + component.size.x - 7.0,
-						component.position.y + scroll_knob_end - 7.0,
-					},
-					7.0,
-					scroll_bar_color,
-				)
+					rl.DrawRectangleV(
+						{
+							component.position.x + component.size.x - v.scroll_bar_width,
+							component.position.y + scroll_bar_half_width,
+						},
+						{v.scroll_bar_width, component.size.y - v.scroll_bar_width},
+						rl.DARKGRAY,
+					)
 
-				rl.DrawRectangleV(
-					{
-						component.position.x + component.size.x - 14.0,
-						component.position.y + scroll_knob_start + 7.0,
-					},
-					{14.0, scroll_knob_length - 14.0},
-					scroll_bar_color,
-				)
+					rl.DrawCircleV(
+						{
+							component.position.x + component.size.x - scroll_bar_half_width,
+							component.position.y + scroll_knob_start + scroll_bar_half_width,
+						},
+						scroll_bar_half_width,
+						scroll_bar_color,
+					)
+
+					rl.DrawCircleV(
+						{
+							component.position.x + component.size.x - scroll_bar_half_width,
+							component.position.y + scroll_knob_end - scroll_bar_half_width,
+						},
+						scroll_bar_half_width,
+						scroll_bar_color,
+					)
+
+					rl.DrawRectangleV(
+						{
+							component.position.x + component.size.x - v.scroll_bar_width,
+							component.position.y + scroll_knob_start + scroll_bar_half_width,
+						},
+						{v.scroll_bar_width, scroll_knob_length - v.scroll_bar_width},
+						scroll_bar_color,
+					)
+				case .Left:
+					rl.DrawCircleV(
+						{
+							component.position.x + scroll_bar_half_width,
+							component.position.y + scroll_bar_half_width,
+						},
+						scroll_bar_half_width,
+						rl.DARKGRAY,
+					)
+					rl.DrawCircleV(
+						{
+							component.position.x + scroll_bar_half_width,
+							component.position.y + component.size.y - scroll_bar_half_width,
+						},
+						scroll_bar_half_width,
+						rl.DARKGRAY,
+					)
+
+					rl.DrawRectangleV(
+						{component.position.x, component.position.y + scroll_bar_half_width},
+						{v.scroll_bar_width, component.size.y - v.scroll_bar_width},
+						rl.DARKGRAY,
+					)
+					rl.DrawCircleV(
+						{
+							component.position.x + scroll_bar_half_width,
+							component.position.y + scroll_knob_start + scroll_bar_half_width,
+						},
+						scroll_bar_half_width,
+						scroll_bar_color,
+					)
+
+					rl.DrawCircleV(
+						{
+							component.position.x + scroll_bar_half_width,
+							component.position.y + scroll_knob_end - scroll_bar_half_width,
+						},
+						scroll_bar_half_width,
+						scroll_bar_color,
+					)
+
+					rl.DrawRectangleV(
+						{
+							component.position.x,
+							component.position.y + scroll_knob_start + scroll_bar_half_width,
+						},
+						{v.scroll_bar_width, scroll_knob_length - v.scroll_bar_width},
+						scroll_bar_color,
+					)
+				}
 			}
 
 			rl.BeginScissorMode(

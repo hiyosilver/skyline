@@ -44,19 +44,14 @@ finish :: proc() {
 }
 
 draw_building :: proc(building: ^Building) {
-	building_textures := textures.building_textures[building.texture_id]
+	building_texture := textures.building_textures[building.texture_id]
 
 	rl.BeginShaderMode(building_shader)
-
-	rl.SetShaderValueTexture(building_shader, normal_map_loc, building_textures.normal)
 
 	time := f32(rl.GetTime())
 	rl.SetShaderValue(building_shader, time_loc, &time, rl.ShaderUniformDataType.FLOAT)
 
-	texture_size := rl.Vector2 {
-		f32(building_textures.albedo.width),
-		f32(building_textures.albedo.height),
-	}
+	texture_size := rl.Vector2{f32(building_texture.width), f32(building_texture.height)}
 	rl.SetShaderValue(
 		building_shader,
 		texture_size_loc,
@@ -74,18 +69,13 @@ draw_building :: proc(building: ^Building) {
 	rl.SetShaderValue(building_shader, selected_loc, &selected, rl.ShaderUniformDataType.INT)
 
 	rl.DrawTexturePro(
-		building_textures.albedo,
-		rl.Rectangle {
-			0.0,
-			0.0,
-			f32(building_textures.albedo.width),
-			f32(building_textures.albedo.height),
-		},
+		building_texture,
+		rl.Rectangle{0.0, 0.0, f32(building_texture.width), f32(building_texture.height)},
 		rl.Rectangle {
 			building.position.x,
 			building.position.y,
-			f32(building_textures.albedo.width),
-			f32(building_textures.albedo.height),
+			f32(building_texture.width),
+			f32(building_texture.height),
 		},
 		building.texture_offset,
 		0.0,
@@ -101,12 +91,12 @@ is_building_hovered :: proc(
 	camera: ^rl.Camera2D,
 ) -> bool {
 	world_mouse_pos := rl.GetScreenToWorld2D(input_data.mouse_position, camera^)
-	building_textures := textures.building_textures[building.texture_id]
+	building_texture := textures.building_textures[building.texture_id]
 	texture_rect := rl.Rectangle {
 		building.position.x - building.texture_offset.x,
 		building.position.y - building.texture_offset.y,
-		f32(building_textures.albedo.width),
-		f32(building_textures.albedo.height),
+		f32(building_texture.width),
+		f32(building_texture.height),
 	}
 
 	//fmt.printfln("mouse_pos: %v", world_mouse_pos)
@@ -117,11 +107,11 @@ is_building_hovered :: proc(
 	   world_mouse_pos.y >= texture_rect.y &&
 	   world_mouse_pos.y <= texture_rect.y + texture_rect.height {
 		x := i32(world_mouse_pos.x) - i32(building.position.x) + i32(building.texture_offset.x)
-		if x < 0 || x >= building_textures.albedo.width {
+		if x < 0 || x >= building_texture.width {
 			return false
 		}
 		y := i32(world_mouse_pos.y) - i32(building.position.y) + i32(building.texture_offset.y)
-		if y < 0 || y >= building_textures.albedo.height {
+		if y < 0 || y >= building_texture.height {
 			return false
 		}
 		pixel_color := rl.GetImageColor(building.image_data, x, y)

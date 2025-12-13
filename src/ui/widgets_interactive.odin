@@ -28,6 +28,7 @@ make_simple_button :: proc(
 	color: rl.Color,
 	min_size: rl.Vector2,
 	child: ^Component = nil,
+	padding: f32 = 4.0,
 ) -> ^Component {
 	c := new(Component)
 
@@ -39,7 +40,7 @@ make_simple_button :: proc(
 		color_default = color,
 		color_hovered = rl.ColorBrightness(color, 0.2),
 		color_pressed = rl.ColorBrightness(color, -0.2),
-		padding       = 4.0,
+		padding       = padding,
 		child         = child,
 	}
 

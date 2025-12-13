@@ -135,6 +135,11 @@ make_margin :: proc(
 	return c
 }
 
+ScrollBarPosition :: enum {
+	Right,
+	Left,
+}
+
 ScrollContainer :: struct {
 	child:               ^Component,
 	scroll_y:            f32, // Tracks how far the view is scrolled down
@@ -142,14 +147,25 @@ ScrollContainer :: struct {
 	viewport_height:     f32, // The height the parent allocated to this container
 	scrollable_range:    f32, // content_height - viewport_height
 	scroll_bar_dragging: bool, // Tracks if the scroll bar is currently being dragged
+	scroll_bar_width:    f32, // Width of the scroll bar, duh
+	scroll_bar_position: ScrollBarPosition, // Side of the container where scroll bar is
 }
 
-make_scroll_container :: proc(min_size: rl.Vector2, child: ^Component = nil) -> ^Component {
+make_scroll_container :: proc(
+	min_size: rl.Vector2,
+	child: ^Component = nil,
+	scroll_bar_width: f32 = 14.0,
+	scroll_bar_position: ScrollBarPosition = .Right,
+) -> ^Component {
 	c := new(Component)
 	c.min_size = min_size
 
+	clamped_scroll_bar_width := clamp(scroll_bar_width, 2.0, scroll_bar_width)
+
 	c.variant = ScrollContainer {
-		child = child,
+		scroll_bar_width    = clamped_scroll_bar_width,
+		scroll_bar_position = scroll_bar_position,
+		child               = child,
 	}
 	return c
 }

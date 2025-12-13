@@ -8,10 +8,6 @@ BuildingTextureId :: enum {
 	SkyscraperAtlasHotel,
 }
 
-BuildingTextures :: struct {
-	albedo, normal: rl.Texture2D,
-}
-
 UiTextureId :: enum {
 	Circle,
 	Ring,
@@ -30,29 +26,26 @@ IconTextureId :: enum {
 exe_path: string
 exe_dir: string
 
-building_textures: map[BuildingTextureId]BuildingTextures
+building_textures: map[BuildingTextureId]rl.Texture2D
 ui_textures: map[UiTextureId]rl.Texture2D
 icon_textures: map[IconTextureId]rl.Texture2D
 
 load_textures :: proc(asset_dir: string) {
-	building_textures = make(map[BuildingTextureId]BuildingTextures, len(BuildingTextureId))
+	building_textures = make(map[BuildingTextureId]rl.Texture2D, len(BuildingTextureId))
 	texture_file_path, normal_texture_file_path: cstring
 	for id in BuildingTextureId {
 		switch id {
 		case .SkyscraperCrownPlaza:
 			texture_file_path = fmt.caprintf("%s/images/skyscraper_crown_plaza.png", asset_dir)
-			normal_texture_file_path = fmt.caprintf(
-				"%s/images/skyscraper_crown_plaza_normal.png",
-				asset_dir,
-			)
 		case .SkyscraperAtlasHotel:
 			texture_file_path = fmt.caprintf("%s/images/atlas_hotel.png", asset_dir)
-			normal_texture_file_path = fmt.caprintf("%s/images/atlas_hotel.png", asset_dir)
 		}
-		building_textures[id] = {
-			rl.LoadTexture(texture_file_path),
-			rl.LoadTexture(normal_texture_file_path),
-		}
+
+		tex := rl.LoadTexture(texture_file_path)
+		rl.GenTextureMipmaps(&tex)
+		rl.SetTextureFilter(tex, .TRILINEAR)
+
+		building_textures[id] = tex
 		delete(texture_file_path)
 		delete(normal_texture_file_path)
 	}
@@ -101,8 +94,7 @@ load_textures :: proc(asset_dir: string) {
 @(fini)
 unload_textures :: proc() {
 	for _, tex in building_textures {
-		rl.UnloadTexture(tex.albedo)
-		rl.UnloadTexture(tex.normal)
+		rl.UnloadTexture(tex)
 	}
 	delete(building_textures)
 

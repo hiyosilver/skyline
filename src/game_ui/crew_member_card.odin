@@ -8,17 +8,18 @@ import "core:fmt"
 import rl "vendor:raylib"
 
 CrewMemberCard :: struct {
-	root:           ^ui.Component,
-	nickname_label: ^ui.Component,
-	brawn_label:    ^ui.Component,
-	savvy_label:    ^ui.Component,
-	tech_label:     ^ui.Component,
-	charisma_label: ^ui.Component,
-	salary_label:   ^ui.Component,
-	job_name_label: ^ui.Component,
-	income_label:   ^ui.Component,
-	ticks_label:    ^ui.Component,
-	progress_box:   ^ui.Component,
+	root:               ^ui.Component,
+	nickname_label:     ^ui.Component,
+	brawn_label:        ^ui.Component,
+	savvy_label:        ^ui.Component,
+	tech_label:         ^ui.Component,
+	charisma_label:     ^ui.Component,
+	salary_label:       ^ui.Component,
+	job_name_label:     ^ui.Component,
+	income_label:       ^ui.Component,
+	ticks_label:        ^ui.Component,
+	progress_box:       ^ui.Component,
+	assigned_job_label: ^ui.Component,
 }
 
 make_crew_member_card :: proc(cm: ^types.CrewMember) -> CrewMemberCard {
@@ -44,6 +45,9 @@ make_crew_member_card :: proc(cm: ^types.CrewMember) -> CrewMemberCard {
 	widget.job_name_label = ui.make_label("", global.font_small, 18.0, rl.RAYWHITE, .Left)
 	widget.income_label = ui.make_label("", global.font_small_italic, 18.0, rl.RAYWHITE, .Left)
 	widget.ticks_label = ui.make_label("", global.font_small_italic, 18.0, rl.RAYWHITE, .Left)
+
+	widget.assigned_job_label = ui.make_label("", global.font_small, 18.0, rl.RAYWHITE, .Left)
+	widget.assigned_job_label.state = .Inactive
 
 	usable_width := f32(320.0 - 32.0)
 
@@ -152,6 +156,7 @@ make_crew_member_card :: proc(cm: ^types.CrewMember) -> CrewMemberCard {
 						widget.ticks_label,
 					),
 					widget.progress_box,
+					widget.assigned_job_label,
 				),
 			),
 		),
@@ -166,8 +171,6 @@ make_crew_member_card :: proc(cm: ^types.CrewMember) -> CrewMemberCard {
 
 	ui.button_set_disabled(widget.root, true)
 
-	update_crew_member_card(&widget, cm, 0.0, 1.0, false)
-
 	return widget
 }
 
@@ -177,6 +180,7 @@ update_crew_member_card :: proc(
 	tick_timer: f32,
 	tick_speed: f32,
 	selectable: bool,
+	job_lookup: map[types.JobID]^types.Job,
 ) {
 	ui.label_set_text(widget.nickname_label, fmt.tprintf("'%s'", cm.nickname))
 
@@ -276,11 +280,23 @@ update_crew_member_card :: proc(
 		}
 	}
 
-	if selectable {
+	job_ptr, is_assigned_to_job := job_lookup[cm.assigned_to_job_id]
+
+	if selectable && !is_assigned_to_job {
 		ui.button_set_disabled(widget.root, false)
 		ui.button_set_color(widget.root, rl.GREEN)
 	} else {
 		ui.button_set_disabled(widget.root, true)
 		ui.button_set_color(widget.root, rl.Color{255, 255, 255, 0})
+	}
+
+	if is_assigned_to_job {
+		widget.assigned_job_label.state = .Active
+		ui.label_set_text(
+			widget.assigned_job_label,
+			fmt.tprintf("Assigned to job %s", job_ptr.name),
+		)
+	} else {
+		widget.assigned_job_label.state = .Inactive
 	}
 }

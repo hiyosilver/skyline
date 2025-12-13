@@ -1,6 +1,7 @@
 package game_ui
 
 import "../global"
+import "../jobs"
 import "../textures"
 import "../types"
 import "../ui"
@@ -36,8 +37,8 @@ make_job_card :: proc(job: ^types.Job) -> JobCard {
 	buyin_pill := ui.make_pill(rl.RAYWHITE, {}, widget.buyin_price_label)
 
 	if _, ok := job.details.(types.BuyinJob); ok {
-		base_color = rl.Color{192, 92, 92, 255}
-		button_color = rl.RED
+		base_color = rl.Color{160, 64, 32, 255}
+		button_color = rl.Color{224, 64, 16, 255}
 	} else {
 		base_color = rl.GRAY
 		button_color = rl.DARKGRAY
@@ -90,12 +91,13 @@ make_job_card :: proc(job: ^types.Job) -> JobCard {
 			status_label := ui.make_label("Empty", global.font_small_italic, 18, rl.GRAY)
 			icon_panel := ui.make_texture_panel(icon, {20, 20})
 
-			slot_visual := ui.make_panel(
+			slot_button := ui.make_simple_button(
+				.OnRelease,
 				rl.DARKGRAY,
-				{40, 40},
+				{50, 50},
 				ui.make_box(.Vertical, .Center, .Center, 2, status_label, icon_panel),
+				0.0,
 			)
-			slot_button := ui.make_simple_button(.OnRelease, rl.DARKGRAY, {50, 50}, slot_visual)
 			append(
 				&widget.crew_slots,
 				JobSlotDisplay {
@@ -167,6 +169,11 @@ update_job_card :: proc(
 	tick_speed: f32,
 	crew_lookup: map[types.CrewMemberID]^types.CrewMember,
 ) {
+	final_income, final_illegitimate_income, final_failure_chance := jobs.calculate_job_values(
+		job,
+		crew_lookup,
+	)
+
 	ui.label_set_text(
 		widget.level_label,
 		fmt.tprintf(
@@ -184,26 +191,26 @@ update_job_card :: proc(
 		ui.label_set_text(widget.name_label, job.name)
 	}
 
-	if job.income > 0.0 {
-		if job.illegitimate_income > 0.0 {
+	if final_income > 0.0 {
+		if final_illegitimate_income > 0.0 {
 			ui.label_set_text(
 				widget.income_label,
 				fmt.tprintf(
 					"$%s & ₴%s",
-					global.format_float_thousands(job.income, 2),
-					global.format_float_thousands(job.illegitimate_income, 2),
+					global.format_float_thousands(final_income, 2),
+					global.format_float_thousands(final_illegitimate_income, 2),
 				),
 			)
 		} else {
 			ui.label_set_text(
 				widget.income_label,
-				fmt.tprintf("$%s", global.format_float_thousands(job.income, 2)),
+				fmt.tprintf("$%s", global.format_float_thousands(final_income, 2)),
 			)
 		}
 	} else {
 		ui.label_set_text(
 			widget.income_label,
-			fmt.tprintf("₴%s", global.format_float_thousands(job.illegitimate_income, 2)),
+			fmt.tprintf("₴%s", global.format_float_thousands(final_illegitimate_income, 2)),
 		)
 	}
 
@@ -218,9 +225,11 @@ update_job_card :: proc(
 				} else {
 					ui.label_set_text(ui_slot.status_label, "Unknown")
 				}
+				ui.button_set_color(ui_slot.root_button, rl.GRAY)
 			} else {
 				ui.label_set_text(ui_slot.status_label, "Empty")
 				ui.label_set_color(ui_slot.status_label, rl.GRAY)
+				ui.button_set_color(ui_slot.root_button, rl.DARKGRAY)
 			}
 
 			is_job_started := job.is_ready || job.is_active
@@ -232,7 +241,7 @@ update_job_card :: proc(
 			fmt.tprintf(
 				"%d ticks (Failure chance: %s%% / tick)",
 				job.ticks_needed,
-				global.format_float_thousands(f64(details.failure_chance * 100.0), 2),
+				global.format_float_thousands(f64(final_failure_chance * 100.0), 2),
 			),
 		)
 		if details.buyin_price > 0.0 {
