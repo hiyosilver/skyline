@@ -18,7 +18,7 @@ make_building_info_panel :: proc() -> BuildingInfoPanel {
 	widget.root = ui.make_anchor(
 		.Center,
 		ui.make_panel(
-			rl.DARKBLUE,
+			rl.GRAY,
 			{100.0, 300.0},
 			ui.make_margin(
 				8,

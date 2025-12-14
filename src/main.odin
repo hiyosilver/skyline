@@ -146,9 +146,6 @@ main :: proc() {
 
 	setup_debug_scenario(&simulation_state, &game_state)
 
-	accumulator: f32 = 0.0
-	max_updates := 5
-
 	frame_input: input.RawInput
 	pending_buttons := make(map[rl.MouseButton]bit_set[input.InputFlags])
 	pending_keys := make(map[rl.KeyboardKey]bit_set[input.InputFlags])
@@ -158,6 +155,9 @@ main :: proc() {
 	screen_w := f32(rl.GetScreenWidth())
 	screen_h := f32(rl.GetScreenHeight())
 
+	accumulator: f32 = 0.0
+	max_updates := 5
+
 	for !rl.WindowShouldClose() {
 		delta := rl.GetFrameTime()
 		accumulator += delta
@@ -166,51 +166,17 @@ main :: proc() {
 
 		process_ui_interactions(&frame_input)
 
-		for btn in rl.MouseButton {
-			flags := frame_input.mouse_buttons[btn]
-			if input.InputFlags.ChangedThisFrame in flags {
-				pending_buttons[btn] = flags
-			}
-		}
+		process_game_input(&frame_input)
 
-		for key in rl.KeyboardKey {
-			flags := frame_input.keys[key]
-			if input.InputFlags.ChangedThisFrame in flags {
-				pending_keys[key] = flags
-			}
-		}
+		buffer_input_changes(&frame_input, &pending_buttons, &pending_keys)
 
 		updates := 0
 		for accumulator >= FIXED_DELTA && updates < max_updates {
-			for btn, flags in pending_buttons {
-				if .ChangedThisFrame in flags {
-					delete_key(&pending_buttons, btn)
-					frame_input.mouse_buttons[btn] += {.ChangedThisFrame}
-				}
-			}
+			apply_buffered_inputs(&frame_input, &pending_buttons, &pending_keys)
 
-			for key, flags in pending_keys {
-				if .ChangedThisFrame in flags {
-					delete_key(&pending_keys, key)
-					frame_input.keys[key] += {.ChangedThisFrame}
-				}
-			}
+			update_fixed(&frame_input)
 
-			update(&frame_input)
-
-			if simulation_state.current_tick == global.TICKS_PER_PERIOD {
-				ui.loading_bar_set_color(game_state.ui.tick_bar_component, rl.RED)
-			} else {
-				ui.loading_bar_set_color(game_state.ui.tick_bar_component, rl.ORANGE)
-			}
-
-			for btn in rl.MouseButton {
-				frame_input.mouse_buttons[btn] -= {.ChangedThisFrame}
-			}
-
-			for key in rl.KeyboardKey {
-				frame_input.keys[key] -= {.ChangedThisFrame}
-			}
+			clear_buffered_inputs(&frame_input)
 
 			accumulator -= FIXED_DELTA
 			updates += 1
@@ -431,6 +397,53 @@ setup_debug_scenario :: proc(simulation: ^simulation.SimulationState, game_state
 
 	rebuild_job_ui_list()
 	rebuild_crew_ui_list()
+}
+
+buffer_input_changes :: proc(
+	frame_input: ^input.RawInput,
+	pending_buttons: ^map[rl.MouseButton]bit_set[input.InputFlags],
+	pending_keys: ^map[rl.KeyboardKey]bit_set[input.InputFlags],
+) {
+	for btn in rl.MouseButton {
+		flags := frame_input.mouse_buttons[btn]
+		if input.InputFlags.ChangedThisFrame in flags {
+			pending_buttons[btn] = flags
+		}
+	}
+	for key in rl.KeyboardKey {
+		flags := frame_input.keys[key]
+		if input.InputFlags.ChangedThisFrame in flags {
+			pending_keys[key] = flags
+		}
+	}
+}
+
+apply_buffered_inputs :: proc(
+	frame_input: ^input.RawInput,
+	pending_buttons: ^map[rl.MouseButton]bit_set[input.InputFlags],
+	pending_keys: ^map[rl.KeyboardKey]bit_set[input.InputFlags],
+) {
+	for btn, flags in pending_buttons {
+		if .ChangedThisFrame in flags {
+			delete_key(pending_buttons, btn)
+			frame_input.mouse_buttons[btn] += {.ChangedThisFrame}
+		}
+	}
+	for key, flags in pending_keys {
+		if .ChangedThisFrame in flags {
+			delete_key(pending_keys, key)
+			frame_input.keys[key] += {.ChangedThisFrame}
+		}
+	}
+}
+
+clear_buffered_inputs :: proc(frame_input: ^input.RawInput) {
+	for btn in rl.MouseButton {
+		frame_input.mouse_buttons[btn] -= {.ChangedThisFrame}
+	}
+	for key in rl.KeyboardKey {
+		frame_input.keys[key] -= {.ChangedThisFrame}
+	}
 }
 
 cleanup :: proc() {
@@ -669,7 +682,7 @@ handle_crew_member_card_interactions :: proc() {
 	}
 }
 
-update :: proc(input_data: ^input.RawInput) {
+process_game_input :: proc(input_data: ^input.RawInput) {
 	if input.is_key_released_this_frame(.SPACE, input_data) {
 		simulation_state.paused = !simulation_state.paused
 	}
@@ -686,44 +699,6 @@ update :: proc(input_data: ^input.RawInput) {
 		} else {
 			game_state.ui.stock_window.root.state = .Inactive
 		}
-	}
-
-	if !simulation_state.paused {
-		simulation_state.tick_timer += FIXED_DELTA
-		if simulation_state.tick_timer >= simulation_state.tick_speed {
-			simulation_state.tick_timer -= simulation_state.tick_speed
-			simulation.tick(&simulation_state)
-		}
-	}
-
-	show_building_info_panel := false
-	for &building in buildings_list {
-		if building.selected {
-			show_building_info_panel = true
-		}
-
-		if input_data.captured do continue
-
-		is_hovered := buildings.is_building_hovered(&building, input_data, &game_state.camera)
-		if is_hovered {
-			building.hovered = true
-			if input.is_mouse_button_released_this_frame(.LEFT, input_data) {
-				building.selected = true
-				break
-			}
-		} else {
-			building.hovered = false
-			if input.is_mouse_button_released_this_frame(.LEFT, input_data) {
-				building.selected = false
-			}
-		}
-	}
-
-	if show_building_info_panel {
-		game_state.ui.building_info_panel.root.state = .Active
-		game_state.ui.stock_window.root.state = .Inactive
-	} else {
-		game_state.ui.building_info_panel.root.state = .Inactive
 	}
 
 	if input.is_mouse_button_held_down(.MIDDLE, input_data) {
@@ -767,6 +742,51 @@ update :: proc(input_data: ^input.RawInput) {
 		game_state.zoom_delay = 0.0
 	} else {
 		game_state.zoom_delay -= FIXED_DELTA
+	}
+}
+
+update_fixed :: proc(input_data: ^input.RawInput) {
+	if !simulation_state.paused {
+		simulation_state.tick_timer += FIXED_DELTA
+		if simulation_state.tick_timer >= simulation_state.tick_speed {
+			simulation_state.tick_timer -= simulation_state.tick_speed
+			simulation.tick(&simulation_state)
+		}
+	}
+
+	show_building_info_panel := false
+	for &building in buildings_list {
+		if building.selected {
+			show_building_info_panel = true
+		}
+
+		if input_data.captured do continue
+
+		is_hovered := buildings.is_building_hovered(&building, input_data, &game_state.camera)
+		if is_hovered {
+			building.hovered = true
+			if input.is_mouse_button_released_this_frame(.LEFT, input_data) {
+				building.selected = true
+			}
+		} else {
+			building.hovered = false
+			if input.is_mouse_button_released_this_frame(.LEFT, input_data) {
+				building.selected = false
+			}
+		}
+	}
+
+	if show_building_info_panel {
+		game_state.ui.building_info_panel.root.state = .Active
+		game_state.ui.stock_window.root.state = .Inactive
+	} else {
+		game_state.ui.building_info_panel.root.state = .Inactive
+	}
+
+	if simulation_state.current_tick == global.TICKS_PER_PERIOD {
+		ui.loading_bar_set_color(game_state.ui.tick_bar_component, rl.RED)
+	} else {
+		ui.loading_bar_set_color(game_state.ui.tick_bar_component, rl.ORANGE)
 	}
 }
 
@@ -839,6 +859,12 @@ draw :: proc(alpha: f32) {
 
 	rl.EndMode2D()
 
+	draw_tick_indicator()
+
+	if game_state.ui.ui_root != nil do ui.draw_components_recursive(game_state.ui.ui_root)
+}
+
+draw_tick_indicator :: proc() {
 	circle_radius: f32 = 12.0
 	ring_width: f32 = 4.0
 	period_display_width :=
@@ -895,6 +921,4 @@ draw :: proc(alpha: f32) {
 		}
 		origin += {circle_radius * 2 + 2, 0}
 	}
-
-	if game_state.ui.ui_root != nil do ui.draw_components_recursive(game_state.ui.ui_root)
 }
