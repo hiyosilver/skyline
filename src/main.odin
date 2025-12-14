@@ -41,6 +41,20 @@ SelectionState :: union #no_nil {
 	AssignCrewMemberSelectionState,
 }
 
+GameUIHandles :: struct {
+	ui_root:                            ^ui.Component,
+	money_label_component:              ^ui.Component,
+	illegitimate_money_label_component: ^ui.Component,
+	tick_bar_component:                 ^ui.Component,
+	jobs_box:                           ^ui.Component,
+	crew_members_box:                   ^ui.Component,
+	graph:                              ^ui.Component,
+	money_radio_button:                 ^ui.Component,
+	illegitimate_money_radio_button:    ^ui.Component,
+	stock_window:                       game_ui.StockWindow,
+	building_info_panel:                game_ui.BuildingInfoPanel,
+}
+
 GameState :: struct {
 	camera:           rl.Camera2D,
 	camera_zoom:      CameraZoom,
@@ -50,6 +64,7 @@ GameState :: struct {
 	// UI Containers
 	job_view_models:  [dynamic]game_ui.JobCard,
 	crew_view_models: [dynamic]game_ui.CrewMemberCard,
+	ui:               GameUIHandles,
 }
 
 JobEntry :: struct {
@@ -68,22 +83,8 @@ exe_dir: string
 simulation_state: simulation.SimulationState
 game_state: GameState
 
-money_label_component: ^ui.Component
-illegitimate_money_label_component: ^ui.Component
-tick_bar_component: ^ui.Component
-
 buildings_list: [dynamic]buildings.Building
 
-jobs_box: ^ui.Component
-crew_members_box: ^ui.Component
-
-graph: ^ui.Component
-money_radio_button: ^ui.Component
-illegitimate_money_radio_button: ^ui.Component
-
-stock_window: game_ui.StockWindow
-
-ui_root: ^ui.Component
 
 main :: proc() {
 	/*
@@ -141,195 +142,18 @@ main :: proc() {
 	game_state.camera.rotation = 0.0
 	game_state.camera.zoom = 1.0
 
+	init_game_ui_layout()
+
+	setup_debug_scenario(&simulation_state, &game_state)
+
 	accumulator: f32 = 0.0
 	max_updates := 5
 
 	frame_input: input.RawInput
 	pending_buttons := make(map[rl.MouseButton]bit_set[input.InputFlags])
 	pending_keys := make(map[rl.KeyboardKey]bit_set[input.InputFlags])
-
-	building_crown_plaza := buildings.Building {
-		position       = {400.0, 800.0},
-		texture_id     = .SkyscraperCrownPlaza,
-		texture_offset = {96.0, 1088.0},
-		image_data     = rl.LoadImageFromTexture(
-			textures.building_textures[.SkyscraperCrownPlaza],
-		),
-		name           = "Crown Plaza Tower",
-	}
-	append(&buildings_list, building_crown_plaza)
-
-	building_atlas_hotel := buildings.Building {
-		position       = {600.0, 860.0},
-		texture_id     = .SkyscraperAtlasHotel,
-		texture_offset = {77.0, 480.0},
-		image_data     = rl.LoadImageFromTexture(
-			textures.building_textures[.SkyscraperAtlasHotel],
-		),
-		name           = "Atlas Hotel",
-	}
-	append(&buildings_list, building_atlas_hotel)
-
-	jobA := jobs.create_job("Construction", 2, 6, 2.5, 1.5)
-	append(&simulation_state.job_entries, jobA)
-
-	jobB := jobs.create_job("Waiting", 1, 5, 3.0, 0.0)
-	append(&simulation_state.job_entries, jobB)
-
-	jobC := jobs.create_job("Fast food", 1, 3, 1.5, 0.0)
-	append(&simulation_state.job_entries, jobC)
-
-	jobD := jobs.create_job("Collect debt", 5, 10, 0.0, 145.0, true)
-	append(&simulation_state.job_entries, jobD)
-
-	jobs_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 8)
-
-	for &job in simulation_state.job_entries {
-		card := game_ui.make_job_card(&job)
-		append(&game_state.job_view_models, card)
-		ui.box_add_child(jobs_box, card.root)
-	}
-
-	job_scroll_container := ui.make_scroll_container(
-		{0.0, global.SCREEN_HEIGHT * 0.5},
-		jobs_box,
-		scroll_bar_position = .Left,
-	)
-
-	job_panel := ui.make_anchor(.BottomLeft, ui.make_margin(16, 16, 16, 16, job_scroll_container))
-
-	crew_memberA := crew.generate_crew_member()
-	append(&simulation_state.crew_roster, crew_memberA)
-
-	crew_memberB := crew.generate_crew_member()
-	append(&simulation_state.crew_roster, crew_memberB)
-
-	crew_memberC := crew.generate_crew_member()
-	append(&simulation_state.crew_roster, crew_memberC)
-
-	crew_members_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 8)
-
-	for &cm in simulation_state.crew_roster {
-		card := game_ui.make_crew_member_card(&cm)
-		append(&game_state.crew_view_models, card)
-		ui.box_add_child(crew_members_box, card.root)
-	}
-
-	crew_panel := ui.make_anchor(.BottomRight, ui.make_margin(16, 16, 16, 16, crew_members_box))
-
-	tick_bar_component = ui.make_loading_bar(
-		0,
-		simulation_state.tick_speed,
-		rl.ORANGE,
-		rl.DARKGRAY,
-		{250.0, 16.0},
-	)
-
-	top_panel := ui.make_anchor(.Top, ui.make_margin(32, 0, 0, 0, tick_bar_component))
-
-	money_label_component = ui.make_label("", global.font_large, 28, rl.BLACK, .Left)
-	illegitimate_money_label_component = ui.make_label(
-		"",
-		global.font_large_italic,
-		28,
-		rl.DARKGRAY,
-		.Left,
-	)
-
-	money_panel := ui.make_anchor(
-		.TopLeft,
-		ui.make_margin(
-			16,
-			16,
-			16,
-			16,
-			ui.make_box(
-				.Vertical,
-				.Start,
-				.Fill,
-				4,
-				money_label_component,
-				illegitimate_money_label_component,
-			),
-		),
-	)
-
-	graph = ui.make_graph({250.0, 150.0}, true)
-
-	money_radio_button = ui.make_radio_button(selected = true)
-	illegitimate_money_radio_button = ui.make_radio_button()
-
-	ui.radio_button_connect(money_radio_button, illegitimate_money_radio_button)
-	ui.radio_button_connect(illegitimate_money_radio_button, money_radio_button)
-
-	graph_panel := ui.make_anchor(
-		.TopRight,
-		ui.make_margin(
-			16,
-			16,
-			16,
-			16,
-			ui.make_box(
-				.Vertical,
-				.Start,
-				.Fill,
-				4,
-				ui.make_box(
-					.Horizontal,
-					.Start,
-					.Center,
-					16,
-					ui.make_pill(
-						rl.GRAY,
-						{},
-						ui.make_box(
-							.Horizontal,
-							.Start,
-							.Center,
-							16,
-							ui.make_box(
-								.Horizontal,
-								.Center,
-								.Center,
-								4,
-								money_radio_button,
-								ui.make_label("$", global.font, 24, rl.BLACK, .Left),
-							),
-							ui.make_box(
-								.Horizontal,
-								.Center,
-								.Center,
-								4,
-								illegitimate_money_radio_button,
-								ui.make_label("₴", global.font, 24, rl.BLACK, .Left),
-							),
-						),
-					),
-				),
-				graph,
-				ui.make_box(
-					.Horizontal,
-					.Start,
-					.Center,
-					4,
-					ui.make_check_box(),
-					ui.make_label("Test check box", global.font, 24, rl.BLACK, .Left),
-				),
-			),
-		),
-	)
-
-	stock_window = game_ui.make_stock_window(&simulation_state.market)
-	stock_window.root.state = .Inactive
-
-	ui_root = ui.make_stack(
-		money_panel,
-		graph_panel,
-		job_panel,
-		crew_panel,
-		top_panel,
-		stock_window.root,
-	)
+	defer delete(pending_buttons)
+	defer delete(pending_keys)
 
 	screen_w := f32(rl.GetScreenWidth())
 	screen_h := f32(rl.GetScreenHeight())
@@ -375,9 +199,9 @@ main :: proc() {
 			update(&frame_input)
 
 			if simulation_state.current_tick == global.TICKS_PER_PERIOD {
-				ui.loading_bar_set_color(tick_bar_component, rl.RED)
+				ui.loading_bar_set_color(game_state.ui.tick_bar_component, rl.RED)
 			} else {
-				ui.loading_bar_set_color(tick_bar_component, rl.ORANGE)
+				ui.loading_bar_set_color(game_state.ui.tick_bar_component, rl.ORANGE)
 			}
 
 			for btn in rl.MouseButton {
@@ -396,9 +220,13 @@ main :: proc() {
 			rebuild_job_ui_list()
 		}
 
+		if len(game_state.crew_view_models) != len(simulation_state.crew_roster) {
+			rebuild_crew_ui_list()
+		}
+
 		sync_ui_visuals()
 
-		ui.update_components_recursive(ui_root, {0, 0, screen_w, screen_h})
+		ui.update_components_recursive(game_state.ui.ui_root, {0, 0, screen_w, screen_h})
 
 		alpha := accumulator / FIXED_DELTA
 
@@ -408,6 +236,201 @@ main :: proc() {
 	}
 
 	cleanup()
+}
+
+init_game_ui_layout :: proc() {
+	game_state.ui.jobs_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 8)
+
+	job_scroll_container := ui.make_scroll_container(
+		{0.0, global.SCREEN_HEIGHT * 0.5},
+		game_state.ui.jobs_box,
+		scroll_bar_position = .Left,
+	)
+
+	job_panel := ui.make_anchor(.BottomLeft, ui.make_margin(16, 16, 16, 16, job_scroll_container))
+
+
+	game_state.ui.crew_members_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 8)
+
+	crew_panel := ui.make_anchor(
+		.BottomRight,
+		ui.make_margin(16, 16, 16, 16, game_state.ui.crew_members_box),
+	)
+
+	game_state.ui.tick_bar_component = ui.make_loading_bar(
+		0,
+		simulation_state.tick_speed,
+		rl.ORANGE,
+		rl.DARKGRAY,
+		{250.0, 16.0},
+	)
+
+	top_panel := ui.make_anchor(
+		.Top,
+		ui.make_margin(32, 0, 0, 0, game_state.ui.tick_bar_component),
+	)
+
+	game_state.ui.money_label_component = ui.make_label("", global.font_large, 28, rl.BLACK, .Left)
+	game_state.ui.illegitimate_money_label_component = ui.make_label(
+		"",
+		global.font_large_italic,
+		28,
+		rl.DARKGRAY,
+		.Left,
+	)
+
+	money_panel := ui.make_anchor(
+		.TopLeft,
+		ui.make_margin(
+			16,
+			16,
+			16,
+			16,
+			ui.make_box(
+				.Vertical,
+				.Start,
+				.Fill,
+				4,
+				game_state.ui.money_label_component,
+				game_state.ui.illegitimate_money_label_component,
+			),
+		),
+	)
+
+	game_state.ui.graph = ui.make_graph({250.0, 150.0}, true)
+
+	game_state.ui.money_radio_button = ui.make_radio_button(selected = true)
+	game_state.ui.illegitimate_money_radio_button = ui.make_radio_button()
+
+	ui.radio_button_connect(
+		game_state.ui.money_radio_button,
+		game_state.ui.illegitimate_money_radio_button,
+	)
+	ui.radio_button_connect(
+		game_state.ui.illegitimate_money_radio_button,
+		game_state.ui.money_radio_button,
+	)
+
+	graph_panel := ui.make_anchor(
+		.TopRight,
+		ui.make_margin(
+			16,
+			16,
+			16,
+			16,
+			ui.make_box(
+				.Vertical,
+				.Start,
+				.Fill,
+				4,
+				ui.make_box(
+					.Horizontal,
+					.Start,
+					.Center,
+					16,
+					ui.make_pill(
+						rl.GRAY,
+						{},
+						ui.make_box(
+							.Horizontal,
+							.Start,
+							.Center,
+							16,
+							ui.make_box(
+								.Horizontal,
+								.Center,
+								.Center,
+								4,
+								game_state.ui.money_radio_button,
+								ui.make_label("$", global.font, 24, rl.BLACK, .Left),
+							),
+							ui.make_box(
+								.Horizontal,
+								.Center,
+								.Center,
+								4,
+								game_state.ui.illegitimate_money_radio_button,
+								ui.make_label("₴", global.font, 24, rl.BLACK, .Left),
+							),
+						),
+					),
+				),
+				game_state.ui.graph,
+				ui.make_box(
+					.Horizontal,
+					.Start,
+					.Center,
+					4,
+					ui.make_check_box(),
+					ui.make_label("Test check box", global.font, 24, rl.BLACK, .Left),
+				),
+			),
+		),
+	)
+
+	game_state.ui.stock_window = game_ui.make_stock_window(&simulation_state.market)
+	game_state.ui.stock_window.root.state = .Inactive
+
+	game_state.ui.building_info_panel = game_ui.make_building_info_panel()
+	game_state.ui.building_info_panel.root.state = .Inactive
+
+	game_state.ui.ui_root = ui.make_stack(
+		money_panel,
+		graph_panel,
+		job_panel,
+		crew_panel,
+		top_panel,
+		game_state.ui.stock_window.root,
+		game_state.ui.building_info_panel.root,
+	)
+}
+
+setup_debug_scenario :: proc(simulation: ^simulation.SimulationState, game_state: ^GameState) {
+	building_crown_plaza := buildings.Building {
+		position       = {400.0, 800.0},
+		texture_id     = .SkyscraperCrownPlaza,
+		texture_offset = {96.0, 1088.0},
+		image_data     = rl.LoadImageFromTexture(
+			textures.building_textures[.SkyscraperCrownPlaza],
+		),
+		name           = "Crown Plaza Tower",
+	}
+	append(&buildings_list, building_crown_plaza)
+
+	building_atlas_hotel := buildings.Building {
+		position       = {600.0, 860.0},
+		texture_id     = .SkyscraperAtlasHotel,
+		texture_offset = {77.0, 480.0},
+		image_data     = rl.LoadImageFromTexture(
+			textures.building_textures[.SkyscraperAtlasHotel],
+		),
+		name           = "Atlas Hotel",
+	}
+	append(&buildings_list, building_atlas_hotel)
+
+	jobA := jobs.create_job("Construction", 2, 6, 2.5, 1.5)
+	append(&simulation_state.job_entries, jobA)
+
+	jobB := jobs.create_job("Waiting", 1, 5, 3.0, 0.0)
+	append(&simulation_state.job_entries, jobB)
+
+	jobC := jobs.create_job("Fast food", 1, 3, 1.5, 0.0)
+	append(&simulation_state.job_entries, jobC)
+
+	jobD := jobs.create_job("Collect debt", 5, 10, 0.0, 145.0, true)
+	append(&simulation_state.job_entries, jobD)
+
+	crew_memberA := crew.generate_crew_member()
+	append(&simulation_state.crew_roster, crew_memberA)
+
+	crew_memberB := crew.generate_crew_member()
+	append(&simulation_state.crew_roster, crew_memberB)
+
+	crew_memberC := crew.generate_crew_member()
+	append(&simulation_state.crew_roster, crew_memberC)
+
+	rebuild_job_ui_list()
+	rebuild_crew_ui_list()
 }
 
 cleanup :: proc() {
@@ -421,33 +444,33 @@ cleanup :: proc() {
 
 	stocks.close_market(&simulation_state.market)
 
-	ui.destroy_components_recursive(ui_root)
+	ui.destroy_components_recursive(game_state.ui.ui_root)
 }
 
 process_ui_interactions :: proc(input_data: ^input.RawInput) {
-	input_data.captured = ui.handle_input_recursive(ui_root, input_data)
+	input_data.captured = ui.handle_input_recursive(game_state.ui.ui_root, input_data)
 
 	handle_stock_window_interactions()
 
 	handle_job_card_interactions()
 
-	if ui.radio_button_was_activated(money_radio_button) ||
-	   ui.radio_button_was_activated(illegitimate_money_radio_button) {
+	if ui.radio_button_was_activated(game_state.ui.money_radio_button) ||
+	   ui.radio_button_was_activated(game_state.ui.illegitimate_money_radio_button) {
 		update_graph()
 	}
 
 	handle_crew_member_card_interactions()
 
-	if bar, ok := &tick_bar_component.variant.(ui.LoadingBar); ok {
+	if bar, ok := &game_state.ui.tick_bar_component.variant.(ui.LoadingBar); ok {
 		bar.current = simulation_state.tick_timer
 		bar.max = simulation_state.tick_speed
 	}
 }
 
 rebuild_job_ui_list :: proc() {
-	if box, ok := &jobs_box.variant.(ui.BoxContainer); ok {
-		for &job_display in box.children {
-			ui.destroy_components_recursive(job_display)
+	if box, ok := &game_state.ui.jobs_box.variant.(ui.BoxContainer); ok {
+		for &job_card in box.children {
+			ui.destroy_components_recursive(job_card)
 		}
 		clear(&box.children)
 	}
@@ -456,7 +479,23 @@ rebuild_job_ui_list :: proc() {
 	for &job in simulation_state.job_entries {
 		card := game_ui.make_job_card(&job)
 		append(&game_state.job_view_models, card)
-		ui.box_add_child(jobs_box, card.root)
+		ui.box_add_child(game_state.ui.jobs_box, card.root)
+	}
+}
+
+rebuild_crew_ui_list :: proc() {
+	if box, ok := &game_state.ui.crew_members_box.variant.(ui.BoxContainer); ok {
+		for &crew_card in box.children {
+			ui.destroy_components_recursive(crew_card)
+		}
+		clear(&box.children)
+	}
+	clear(&game_state.crew_view_models)
+
+	for &crew in simulation_state.crew_roster {
+		card := game_ui.make_crew_member_card(&crew)
+		append(&game_state.crew_view_models, card)
+		ui.box_add_child(game_state.ui.crew_members_box, card.root)
 	}
 }
 
@@ -479,7 +518,7 @@ update_graph :: proc() {
 
 	min_val, max_val := math.F64_MAX, math.F64_MIN
 
-	if ui.radio_button_is_selected(money_radio_button) {
+	if ui.radio_button_is_selected(game_state.ui.money_radio_button) {
 		for &stats in simulation_state.tick_stats_buffer {
 			min_val = min(min_val, stats.current_money)
 			max_val = max(max_val, stats.current_money)
@@ -487,17 +526,17 @@ update_graph :: proc() {
 
 		range := max_val - min_val
 
-		ui.graph_set_line_color(graph, rl.GREEN)
+		ui.graph_set_line_color(game_state.ui.graph, rl.GREEN)
 
 		ui.graph_set_data(
-			graph,
+			game_state.ui.graph,
 			&simulation_state.tick_stats_buffer,
 			len(simulation_state.tick_stats_buffer),
 			get_money_from_stats,
 			f32(min_val - range * 0.1),
 			f32(max_val + range * 0.1),
 		)
-	} else if ui.radio_button_is_selected(illegitimate_money_radio_button) {
+	} else if ui.radio_button_is_selected(game_state.ui.illegitimate_money_radio_button) {
 		for &stats in simulation_state.tick_stats_buffer {
 			min_val = min(min_val, stats.current_illegitimate_money)
 			max_val = max(max_val, stats.current_illegitimate_money)
@@ -505,10 +544,10 @@ update_graph :: proc() {
 
 		range := max_val - min_val
 
-		ui.graph_set_line_color(graph, rl.ORANGE)
+		ui.graph_set_line_color(game_state.ui.graph, rl.ORANGE)
 
 		ui.graph_set_data(
-			graph,
+			game_state.ui.graph,
 			&simulation_state.tick_stats_buffer,
 			len(simulation_state.tick_stats_buffer),
 			get_illegitimate_money_from_stats,
@@ -519,36 +558,40 @@ update_graph :: proc() {
 }
 
 handle_stock_window_interactions :: proc() {
-	if box, ok := &stock_window.stock_list_box.variant.(ui.BoxContainer); ok {
+	if box, ok := &game_state.ui.stock_window.stock_list_box.variant.(ui.BoxContainer); ok {
 		for child, i in box.children {
 			if ui.button_was_clicked(child) {
-				selected_id := stock_window.company_list[i]
-				stock_window.selected_id = selected_id
+				selected_id := game_state.ui.stock_window.company_list[i]
+				game_state.ui.stock_window.selected_id = selected_id
 			}
 		}
 	}
 
-	if ui.button_was_clicked(stock_window.buy_button) {
-		simulation.buy_stock(&simulation_state, stock_window.selected_id, 1)
+	if ui.button_was_clicked(game_state.ui.stock_window.buy_button) {
+		simulation.buy_stock(&simulation_state, game_state.ui.stock_window.selected_id, 1)
 	}
 
-	if ui.button_was_clicked(stock_window.sell_button) {
-		simulation.sell_stock(&simulation_state, stock_window.selected_id, 1)
+	if ui.button_was_clicked(game_state.ui.stock_window.sell_button) {
+		simulation.sell_stock(&simulation_state, game_state.ui.stock_window.selected_id, 1)
 	}
 
-	if ui.button_was_clicked(stock_window.buy_all_button) {
+	if ui.button_was_clicked(game_state.ui.stock_window.buy_all_button) {
 		number_to_buy := int(
 			simulation_state.money /
-			simulation_state.market.companies[stock_window.selected_id].current_price,
+			simulation_state.market.companies[game_state.ui.stock_window.selected_id].current_price,
 		)
-		simulation.buy_stock(&simulation_state, stock_window.selected_id, number_to_buy)
+		simulation.buy_stock(
+			&simulation_state,
+			game_state.ui.stock_window.selected_id,
+			number_to_buy,
+		)
 	}
 
-	if ui.button_was_clicked(stock_window.sell_all_button) {
-		stock_info := &simulation_state.stock_portfolio.stocks[stock_window.selected_id]
+	if ui.button_was_clicked(game_state.ui.stock_window.sell_all_button) {
+		stock_info := &simulation_state.stock_portfolio.stocks[game_state.ui.stock_window.selected_id]
 		simulation.sell_stock(
 			&simulation_state,
-			stock_window.selected_id,
+			game_state.ui.stock_window.selected_id,
 			stock_info.quantity_owned,
 		)
 	}
@@ -632,10 +675,16 @@ update :: proc(input_data: ^input.RawInput) {
 	}
 
 	if input.is_key_released_this_frame(.S, input_data) {
-		if stock_window.root.state == .Inactive {
-			stock_window.root.state = .Active
+		if game_state.ui.stock_window.root.state == .Inactive {
+			game_state.ui.stock_window.root.state = .Active
+
+			for &building in buildings_list {
+				building.selected = false
+			}
+
+			game_state.ui.building_info_panel.root.state = .Inactive
 		} else {
-			stock_window.root.state = .Inactive
+			game_state.ui.stock_window.root.state = .Inactive
 		}
 	}
 
@@ -647,12 +696,20 @@ update :: proc(input_data: ^input.RawInput) {
 		}
 	}
 
+	show_building_info_panel := false
 	for &building in buildings_list {
+		if building.selected {
+			show_building_info_panel = true
+		}
+
+		if input_data.captured do continue
+
 		is_hovered := buildings.is_building_hovered(&building, input_data, &game_state.camera)
-		if is_hovered && !input_data.captured {
+		if is_hovered {
 			building.hovered = true
 			if input.is_mouse_button_released_this_frame(.LEFT, input_data) {
 				building.selected = true
+				break
 			}
 		} else {
 			building.hovered = false
@@ -660,6 +717,13 @@ update :: proc(input_data: ^input.RawInput) {
 				building.selected = false
 			}
 		}
+	}
+
+	if show_building_info_panel {
+		game_state.ui.building_info_panel.root.state = .Active
+		game_state.ui.stock_window.root.state = .Inactive
+	} else {
+		game_state.ui.building_info_panel.root.state = .Inactive
 	}
 
 	if input.is_mouse_button_held_down(.MIDDLE, input_data) {
@@ -710,10 +774,17 @@ sync_ui_visuals :: proc() {
 	update_graph()
 
 	game_ui.update_stock_window(
-		&stock_window,
+		&game_state.ui.stock_window,
 		&simulation_state.market,
 		&simulation_state.stock_portfolio,
 	)
+
+	for &building in buildings_list {
+		if building.selected {
+			game_ui.update_building_info_panel(&game_state.ui.building_info_panel, &building)
+			break
+		}
+	}
 
 	crew_lookup := simulation.generate_crew_lookup(&simulation_state)
 
@@ -732,7 +803,7 @@ sync_ui_visuals :: proc() {
 
 	if simulation_state.tax_debt > 0.0 {
 		ui.label_set_text(
-			money_label_component,
+			game_state.ui.money_label_component,
 			fmt.tprintf(
 				"$%s (-$%s)",
 				global.format_float_thousands(simulation_state.money, 2),
@@ -741,12 +812,12 @@ sync_ui_visuals :: proc() {
 		)
 	} else {
 		ui.label_set_text(
-			money_label_component,
+			game_state.ui.money_label_component,
 			fmt.tprintf("$%s", global.format_float_thousands(simulation_state.money, 2)),
 		)
 	}
 	ui.label_set_text(
-		illegitimate_money_label_component,
+		game_state.ui.illegitimate_money_label_component,
 		fmt.tprintf(
 			"₴%s",
 			global.format_float_thousands(simulation_state.illegitimate_money, 2),
@@ -825,5 +896,5 @@ draw :: proc(alpha: f32) {
 		origin += {circle_radius * 2 + 2, 0}
 	}
 
-	if ui_root != nil do ui.draw_components_recursive(ui_root)
+	if game_state.ui.ui_root != nil do ui.draw_components_recursive(game_state.ui.ui_root)
 }

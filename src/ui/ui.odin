@@ -101,7 +101,7 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 		child_desired_size := get_desired_size(v.child)
 
 		desired_size.x = max(component.min_size.x, child_desired_size.x) + v.scroll_bar_width
-		desired_size.y = component.min_size.y
+		desired_size.y = min(child_desired_size.y, component.min_size.y)
 	case Panel:
 		desired_size = get_desired_size(v.child)
 		desired_size = {

@@ -272,7 +272,7 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 		),
 	)
 
-	stock_panel := ui.make_anchor(
+	widget.root = ui.make_anchor(
 		.Center,
 		ui.make_panel(
 			base_color,
@@ -294,8 +294,6 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 			),
 		),
 	)
-
-	widget.root = stock_panel
 
 	return widget
 }
