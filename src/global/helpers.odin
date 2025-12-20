@@ -1,5 +1,6 @@
 package global
 
+import "../types"
 import "base:intrinsics"
 import "core:fmt"
 import "core:math"
@@ -124,4 +125,18 @@ format_int_thousands :: proc(
 	}
 
 	return strings.to_string(sb)
+}
+
+find_crew_member :: proc(roster: []types.CrewMember, id: types.CrewMemberID) -> ^types.CrewMember {
+	for &cm in roster {
+		if cm.id == id do return &cm
+	}
+	return nil
+}
+
+find_job :: proc(roster: []types.Job, id: types.JobID) -> ^types.Job {
+	for &job in roster {
+		if job.id == id do return &job
+	}
+	return nil
 }

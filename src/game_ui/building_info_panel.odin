@@ -188,15 +188,10 @@ update_building_info_panel :: proc(
 		widget.purchase_button_box.state = .Active
 		widget.owned_label.state = .Hidden
 
-		if purchase_button, ok := widget.purchase_button.variant.(ui.SimpleButton); ok {
-			ui.label_set_text(
-				purchase_button.child,
-				fmt.tprintf(
-					"$%s",
-					global.format_float_thousands(building.purchase_price.money, 2),
-				),
-			)
-		}
+		ui.button_set_label_text(
+			widget.purchase_button,
+			fmt.tprintf("$%s", global.format_float_thousands(building.purchase_price.money, 2)),
+		)
 
 		alt_purchase_button, ok := widget.alt_purchase_button.variant.(ui.SimpleButton)
 		alt_price, ok_alt := building.alt_purchase_price.(types.PurchasePrice)

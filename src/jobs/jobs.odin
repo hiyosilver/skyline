@@ -51,10 +51,7 @@ create_job :: proc(
 	}
 }
 
-tick :: proc(
-	job: ^types.Job,
-	crew_lookup: map[types.CrewMemberID]^types.CrewMember,
-) -> types.JobResult {
+tick :: proc(job: ^types.Job) -> types.JobResult {
 	if !job.is_active do return .Inactive
 
 	#partial switch &d in job.details {

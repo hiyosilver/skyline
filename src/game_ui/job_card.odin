@@ -175,7 +175,7 @@ update_job_card :: proc(
 	job: ^types.Job,
 	tick_timer: f32,
 	tick_speed: f32,
-	crew_lookup: map[types.CrewMemberID]^types.CrewMember,
+	roster: []types.CrewMember,
 	money: f64,
 	illegitimate_money: f64,
 ) {
@@ -238,7 +238,10 @@ update_job_card :: proc(
 			ui_slot := widget.crew_slots[i]
 
 			if slot_data.assigned_crew_member != 0 {
-				if crew_ptr, found := crew_lookup[slot_data.assigned_crew_member]; found {
+				crew_ptr := global.find_crew_member(roster, slot_data.assigned_crew_member)
+				found := crew_ptr != nil
+
+				if found {
 					ui.label_set_text(ui_slot.status_label, crew_ptr.nickname)
 					ui.label_set_color(ui_slot.status_label, rl.GREEN)
 				} else {

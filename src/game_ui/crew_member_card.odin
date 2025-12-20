@@ -186,7 +186,7 @@ update_crew_member_card :: proc(
 	tick_timer: f32,
 	tick_speed: f32,
 	selectable: bool,
-	job_lookup: map[types.JobID]^types.Job,
+	jobs: []types.Job,
 ) {
 	ui.label_set_text(widget.nickname_label, fmt.tprintf("'%s'", cm.nickname))
 
@@ -286,7 +286,8 @@ update_crew_member_card :: proc(
 		}
 	}
 
-	job_ptr, is_assigned_to_job := job_lookup[cm.assigned_to_job_id]
+	job_ptr := global.find_job(jobs, cm.assigned_to_job_id)
+	is_assigned_to_job := job_ptr != nil
 
 	if selectable && !is_assigned_to_job {
 		ui.button_set_disabled(widget.root, false)

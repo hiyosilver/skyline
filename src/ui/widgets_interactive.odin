@@ -89,6 +89,14 @@ button_reset_state :: proc(component: ^Component) {
 	}
 }
 
+button_set_label_text :: proc(component: ^Component, text: string) {
+	if component == nil do return
+
+	if btn, ok := &component.variant.(SimpleButton); ok {
+		label_set_text(btn.child, text)
+	}
+}
+
 RadioButton :: struct {
 	selected:                bool,
 	state:                   SimpleButtonState,

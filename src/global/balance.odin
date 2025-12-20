@@ -1,0 +1,3 @@
+package global
+
+BRAWN_FAILURE_REDUCTION :: 0.005

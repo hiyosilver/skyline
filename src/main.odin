@@ -555,11 +555,17 @@ handle_stock_window_interactions :: proc() {
 	}
 
 	if ui.button_was_clicked(game_state.ui.stock_window.buy_button) {
-		simulation.buy_stock(&simulation_state, game_state.ui.stock_window.selected_id, 1)
+		simulation.queue_action(
+			&simulation_state,
+			types.ActionBuyStock{game_state.ui.stock_window.selected_id, 1},
+		)
 	}
 
 	if ui.button_was_clicked(game_state.ui.stock_window.sell_button) {
-		simulation.sell_stock(&simulation_state, game_state.ui.stock_window.selected_id, 1)
+		simulation.queue_action(
+			&simulation_state,
+			types.ActionSellStock{game_state.ui.stock_window.selected_id, 1},
+		)
 	}
 
 	if ui.button_was_clicked(game_state.ui.stock_window.buy_all_button) {
@@ -567,19 +573,21 @@ handle_stock_window_interactions :: proc() {
 			simulation_state.money /
 			simulation_state.market.companies[game_state.ui.stock_window.selected_id].current_price,
 		)
-		simulation.buy_stock(
+		simulation.queue_action(
 			&simulation_state,
-			game_state.ui.stock_window.selected_id,
-			number_to_buy,
+			types.ActionBuyStock{game_state.ui.stock_window.selected_id, number_to_buy},
 		)
 	}
 
 	if ui.button_was_clicked(game_state.ui.stock_window.sell_all_button) {
 		stock_info := &simulation_state.stock_portfolio.stocks[game_state.ui.stock_window.selected_id]
-		simulation.sell_stock(
+
+		simulation.queue_action(
 			&simulation_state,
-			game_state.ui.stock_window.selected_id,
-			stock_info.quantity_owned,
+			types.ActionSellStock {
+				game_state.ui.stock_window.selected_id,
+				stock_info.quantity_owned,
+			},
 		)
 	}
 }
@@ -592,7 +600,7 @@ handle_job_card_interactions :: proc() {
 		display := &game_state.job_view_models[i]
 
 		if ui.button_was_clicked(display.start_button) {
-			simulation.interact_toggle_job(&simulation_state, i)
+			simulation.queue_action(&simulation_state, types.ActionToggleJob{i})
 		}
 
 		details, is_buyin := &job.details.(types.BuyinJob)
@@ -602,7 +610,7 @@ handle_job_card_interactions :: proc() {
 			if !ui.button_was_clicked(slot_display.root_button) do continue
 
 			if details.crew_member_slots[j].assigned_crew_member != 0 {
-				simulation.clear_crew(&simulation_state, job.id, j)
+				simulation.queue_action(&simulation_state, types.ActionClearCrew{job.id, j})
 			} else {
 				game_state.selection_state = AssignCrewMemberSelectionState {
 					target_job_id          = job.id,
@@ -623,15 +631,16 @@ handle_crew_member_card_interactions :: proc() {
 
 		if ui.button_was_clicked(display.root) {
 			if is_crew_selection_mode {
-				if simulation.try_assign_crew(
+				simulation.queue_action(
 					&simulation_state,
-					state.target_job_id,
-					state.target_crew_slot_index,
-					crew_member.id,
-				) {
-					game_state.selection_state = DefaultSelectionState{}
-					sync_ui_visuals()
-				}
+					types.ActionAssignCrew {
+						state.target_job_id,
+						state.target_crew_slot_index,
+						crew_member.id,
+					},
+				)
+				game_state.selection_state = DefaultSelectionState{}
+				sync_ui_visuals()
 			}
 		}
 	}
@@ -642,19 +651,24 @@ handle_building_info_panel_interactions :: proc() {
 		if !building.selected do continue
 
 		if ui.button_was_clicked(game_state.ui.building_info_panel.purchase_button) {
-			simulation.purchase_building(&simulation_state, &building)
+			simulation.queue_action(
+				&simulation_state,
+				types.ActionPurchaseBuilding{building_id = building.id},
+			)
 		}
 
 		if ui.button_was_clicked(game_state.ui.building_info_panel.alt_purchase_button) {
-			simulation.purchase_building_alt_price(&simulation_state, &building)
+			simulation.queue_action(
+				&simulation_state,
+				types.ActionPurchaseBuildingAltPrice{building_id = building.id},
+			)
 		}
 
 		for row in game_state.ui.building_info_panel.upgrade_rows {
 			if ui.button_was_clicked(row.button) {
-				simulation.buy_upgrade(
+				simulation.queue_action(
 					&simulation_state,
-					game_state.ui.building_info_panel.current_building_id,
-					row.upgrade_id,
+					types.ActionBuyUpgrade{building_id = building.id, upgrade_id = row.upgrade_id},
 				)
 
 				sync_ui_visuals()
@@ -728,13 +742,7 @@ process_game_input :: proc(input_data: ^input.RawInput) {
 }
 
 update_fixed :: proc(input_data: ^input.RawInput) {
-	if !simulation_state.paused {
-		simulation_state.tick_timer += FIXED_DELTA
-		if simulation_state.tick_timer >= simulation_state.tick_speed {
-			simulation_state.tick_timer -= simulation_state.tick_speed
-			simulation.tick(&simulation_state)
-		}
-	}
+	simulation.update(&simulation_state, FIXED_DELTA)
 
 	show_building_info_panel := false
 	for &building in simulation_state.buildings_list {
@@ -793,8 +801,6 @@ sync_ui_visuals :: proc() {
 		}
 	}
 
-	crew_lookup := simulation.generate_crew_lookup(&simulation_state)
-
 	for i in 0 ..< len(simulation_state.job_entries) {
 		view := &game_state.job_view_models[i]
 		data := &simulation_state.job_entries[i]
@@ -804,7 +810,7 @@ sync_ui_visuals :: proc() {
 			data,
 			simulation_state.tick_timer,
 			simulation_state.tick_speed,
-			crew_lookup,
+			simulation_state.crew_roster[:],
 			simulation_state.money,
 			simulation_state.illegitimate_money,
 		)
@@ -815,7 +821,6 @@ sync_ui_visuals :: proc() {
 	for i in 0 ..< len(simulation_state.crew_roster) {
 		view := &game_state.crew_view_models[i]
 		data := &simulation_state.crew_roster[i]
-		job_lookup := simulation.generate_job_lookup(&simulation_state)
 
 		game_ui.update_crew_member_card(
 			view,
@@ -823,7 +828,7 @@ sync_ui_visuals :: proc() {
 			simulation_state.tick_timer,
 			simulation_state.tick_speed,
 			is_crew_selection_mode,
-			job_lookup,
+			simulation_state.job_entries[:],
 		)
 	}
 
