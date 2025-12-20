@@ -58,8 +58,6 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 
 	widget.selected_id = -1
 
-	base_color := rl.GRAY
-
 	widget.stock_list_box = ui.make_box(.Vertical, .Start, .Fill, 4)
 
 	widget.rating_labels = make([dynamic]^ui.Component)
@@ -85,6 +83,7 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 			widget.stock_list_box,
 			ui.make_simple_button(
 				.OnRelease,
+				rl.GRAY,
 				rl.DARKGRAY,
 				{},
 				ui.make_box(
@@ -152,12 +151,14 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 	widget.buy_button = ui.make_simple_button(
 		.OnRelease,
 		rl.GRAY,
+		rl.DARKGRAY,
 		{100.0, 0.0},
 		ui.make_label("Buy 1", global.font, 24, rl.BLACK),
 	)
 	widget.sell_button = ui.make_simple_button(
 		.OnRelease,
 		rl.GRAY,
+		rl.DARKGRAY,
 		{100.0, 0.0},
 		ui.make_label("Sell 1", global.font, 24, rl.BLACK),
 	)
@@ -165,6 +166,7 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 	widget.buy_all_button = ui.make_simple_button(
 		.OnRelease,
 		rl.GRAY,
+		rl.DARKGRAY,
 		{100.0, 0.0},
 		ui.make_label("Buy all", global.font, 24, rl.BLACK),
 	)
@@ -172,6 +174,7 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 	widget.sell_all_button = ui.make_simple_button(
 		.OnRelease,
 		rl.GRAY,
+		rl.DARKGRAY,
 		{100.0, 0.0},
 		ui.make_label("Sell all", global.font, 24, rl.BLACK),
 	)
@@ -274,9 +277,13 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 
 	widget.root = ui.make_anchor(
 		.Center,
-		ui.make_panel(
-			base_color,
+		ui.make_n_patch_texture_panel(
+			textures.ui_textures[.Panel],
 			{},
+			6,
+			6,
+			6,
+			6,
 			ui.make_margin(
 				16,
 				16,
@@ -288,7 +295,10 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 					.Fill,
 					10,
 					ui.make_label("Stock Market", global.font_large, 28, rl.WHITE),
-					ui.make_scroll_container({600.0, 400.0}, widget.stock_list_box),
+					ui.make_scroll_container(
+						{600.0, global.WINDOW_HEIGHT * 0.5},
+						widget.stock_list_box,
+					),
 					widget.detail_root,
 				),
 			),

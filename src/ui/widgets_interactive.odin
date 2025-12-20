@@ -16,16 +16,16 @@ SimpleButtonClickType :: enum {
 }
 
 SimpleButton :: struct {
-	child:                                       ^Component,
-	state:                                       SimpleButtonState,
-	click_type:                                  SimpleButtonClickType,
-	color_default, color_hovered, color_pressed: rl.Color,
-	padding:                                     f32,
+	child:                                                       ^Component,
+	state:                                                       SimpleButtonState,
+	click_type:                                                  SimpleButtonClickType,
+	color_default, color_hovered, color_pressed, color_disabled: rl.Color,
+	padding:                                                     f32,
 }
 
 make_simple_button :: proc(
 	click_type: SimpleButtonClickType,
-	color: rl.Color,
+	color, color_disabled: rl.Color,
 	min_size: rl.Vector2,
 	child: ^Component = nil,
 	padding: f32 = 4.0,
@@ -35,20 +35,21 @@ make_simple_button :: proc(
 	c.min_size = min_size
 
 	c.variant = SimpleButton {
-		state         = .Idle,
-		click_type    = click_type,
-		color_default = color,
-		color_hovered = rl.ColorBrightness(color, 0.2),
-		color_pressed = rl.ColorBrightness(color, -0.2),
-		padding       = padding,
-		child         = child,
+		state          = .Idle,
+		click_type     = click_type,
+		color_default  = color,
+		color_hovered  = rl.ColorBrightness(color, 0.2),
+		color_pressed  = rl.ColorBrightness(color, -0.2),
+		color_disabled = color_disabled,
+		padding        = padding,
+		child          = child,
 	}
 
 	return c
 }
 
 button_was_clicked :: proc(component: ^Component) -> bool {
-	if component == nil do return false
+	if component == nil || component.state == .Inactive do return false
 	if btn, ok := component.variant.(SimpleButton); ok {
 		return btn.state == .Released
 	}
@@ -72,9 +73,19 @@ button_set_color :: proc(component: ^Component, color: rl.Color) {
 	if component == nil do return
 
 	if btn, ok := &component.variant.(SimpleButton); ok {
+		if btn.color_default == color do return
+
 		btn.color_default = color
 		btn.color_hovered = rl.ColorBrightness(color, 0.2)
 		btn.color_pressed = rl.ColorBrightness(color, -0.2)
+	}
+}
+
+button_reset_state :: proc(component: ^Component) {
+	if component == nil do return
+
+	if btn, ok := &component.variant.(SimpleButton); ok {
+		btn.state = .Idle
 	}
 }
 

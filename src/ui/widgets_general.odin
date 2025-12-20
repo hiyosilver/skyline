@@ -72,6 +72,43 @@ texture_panel_set_tint_color :: proc(component: ^Component, tint_color: rl.Color
 	}
 }
 
+NPatchTexturePanel :: struct {
+	child:                    ^Component,
+	texture:                  rl.Texture2D,
+	left, top, right, bottom: i32,
+}
+
+make_n_patch_texture_panel :: proc(
+	texture: rl.Texture2D,
+	min_size: rl.Vector2,
+	left, top, right, bottom: i32,
+	child: ^Component = nil,
+) -> ^Component {
+	c := new(Component)
+
+	c.size = min_size
+	c.min_size = min_size
+
+	c.variant = NPatchTexturePanel {
+		texture = texture,
+		child   = child,
+		left    = left,
+		top     = top,
+		right   = right,
+		bottom  = bottom,
+	}
+
+	return c
+}
+
+n_patch_texture_panel_set_texture :: proc(component: ^Component, texture: rl.Texture2D) {
+	if component == nil do return
+
+	if n_patch_texture_panel, ok := &component.variant.(NPatchTexturePanel); ok {
+		n_patch_texture_panel.texture = texture
+	}
+}
+
 Pill :: struct {
 	child: ^Component,
 	color: rl.Color,
@@ -121,8 +158,11 @@ label_set_text :: proc(component: ^Component, text: string) {
 	if component == nil do return
 
 	if label, ok := &component.variant.(Label); ok {
+		new_text := strings.clone_to_cstring(text)
+		if label.text == new_text do return
+
 		delete(label.text)
-		label.text = strings.clone_to_cstring(text)
+		label.text = new_text
 
 		component.desired_size = {0, 0}
 	}
@@ -132,6 +172,8 @@ label_set_color :: proc(component: ^Component, color: rl.Color) {
 	if component == nil do return
 
 	if label, ok := &component.variant.(Label); ok {
+		if label.color == color do return
+
 		label.color = color
 	}
 }

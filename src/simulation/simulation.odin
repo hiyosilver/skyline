@@ -48,6 +48,7 @@ SimulationState :: struct {
 	stock_portfolio:           stocks.StockPortfolio,
 	job_entries:               [dynamic]types.Job,
 	crew_roster:               [dynamic]types.CrewMember,
+	buildings_list:            [dynamic]types.Building,
 }
 
 init :: proc() -> SimulationState {
@@ -82,22 +83,17 @@ tick :: proc(simulation_state: ^SimulationState) {
 	crew_lookup := generate_crew_lookup(simulation_state)
 
 	#reverse for &job in simulation_state.job_entries {
-		final_income, final_illegitimate_income, final_failure_chance := jobs.calculate_job_values(
-			&job,
-			crew_lookup,
-		)
-
-		job_result := jobs.tick(&job, crew_lookup, final_failure_chance)
+		job_result := jobs.tick(&job, crew_lookup)
 		if job.is_ready {
 			job.is_active = true
 		}
 		if job_result == .Finished {
-			simulation_state.money += final_income
-			simulation_state.period_income += final_income
-			simulation_state.illegitimate_money += final_illegitimate_income
+			simulation_state.money += job.cached_income
+			simulation_state.period_income += job.cached_income
+			simulation_state.illegitimate_money += job.cached_illegitimate_income
 
-			tick_stats.income += final_income
-			tick_stats.illegitimate_income += final_illegitimate_income
+			tick_stats.income += job.cached_income
+			tick_stats.illegitimate_income += job.cached_illegitimate_income
 
 			#partial switch &d in job.details {
 			case types.BuyinJob:
@@ -111,20 +107,46 @@ tick :: proc(simulation_state: ^SimulationState) {
 	}
 
 	for &crew_member in simulation_state.crew_roster {
-		job_result := jobs.tick(&crew_member.default_job, crew_lookup, 0.0)
+		job_result := jobs.tick(&crew_member.default_job, crew_lookup)
 		if crew_member.default_job.is_ready {
 			crew_member.default_job.is_active = true
 		}
 		if job_result == .Finished {
-			simulation_state.money += crew_member.default_job.income
-			simulation_state.period_income += crew_member.default_job.income
-			tick_stats.income += crew_member.default_job.income
-			simulation_state.illegitimate_money += crew_member.default_job.illegitimate_income
-			tick_stats.illegitimate_income += crew_member.default_job.illegitimate_income
+			simulation_state.money += crew_member.default_job.cached_income
+			simulation_state.period_income += crew_member.default_job.cached_income
+			tick_stats.income += crew_member.default_job.cached_income
+			simulation_state.illegitimate_money +=
+				crew_member.default_job.cached_illegitimate_income
+			tick_stats.illegitimate_income += crew_member.default_job.cached_illegitimate_income
 		} else if job_result == .Failed {
 			jobs.deactivate(&crew_member.default_job)
 		}
 	}
+
+	commercial_revenue: f64
+	for &building in simulation_state.buildings_list {
+		if !building.owned do continue
+
+		commercial_revenue += building.base_tick_income * building.effect_stats.income_multiplier
+
+		laundering_flow := min(
+			simulation_state.illegitimate_money,
+			building.base_laundering_amount * building.effect_stats.laundering_amount_multiplier,
+		)
+		if laundering_flow > 0.0 {
+			simulation_state.illegitimate_money -= laundering_flow
+			tick_stats.illegitimate_income -= laundering_flow
+
+			commercial_revenue +=
+				laundering_flow *
+				(building.base_laundering_efficiency +
+						building.effect_stats.laundering_efficiency_bonus_flat)
+		}
+	}
+
+	simulation_state.money += commercial_revenue
+	simulation_state.period_income += commercial_revenue
+	tick_stats.income += commercial_revenue
 
 	simulation_state.current_tick += 1
 	stocks.update_market_tick(&simulation_state.market)
@@ -366,12 +388,44 @@ try_assign_crew :: proc(
 
 			jobs.deactivate(&crew_member.default_job)
 
-			fmt.printf("Assigned ID %d to Job Slot %d\n", crew_id, slot_idx)
+			calculate_job_values(simulation_state, target_job)
 
 			return true
 		}
 	}
 	return false
+}
+
+calculate_job_values :: proc(simulation_state: ^SimulationState, job: ^types.Job) {
+	final_income := job.base_income
+	final_illegitimate_income := job.base_illegitimate_income
+
+	details, is_buyin := &job.details.(types.BuyinJob)
+
+	if !is_buyin do return
+
+	final_failure_chance := details.base_failure_chance
+
+	for slot in details.crew_member_slots {
+		if slot.assigned_crew_member == 0 do continue
+
+		crew_member := get_crew_member_by_id(simulation_state, slot.assigned_crew_member)
+
+		switch slot.type {
+		case .Brawn:
+			final_failure_chance -= f32(crew_member.brawn) * 0.005
+		case .Savvy:
+			final_income *= 1.0 + f64(crew_member.savvy) * 0.1
+		case .Tech:
+		//TODO: heat!
+		case .Charisma:
+			final_illegitimate_income *= 1.0 + f64(crew_member.charisma) * 0.1
+		}
+	}
+
+	job.cached_income = final_income
+	job.cached_illegitimate_income = final_illegitimate_income
+	details.cached_failure_chance = final_failure_chance
 }
 
 clear_crew :: proc(simulation_state: ^SimulationState, job_id: types.JobID, slot_idx: int) {
@@ -388,11 +442,78 @@ clear_crew :: proc(simulation_state: ^SimulationState, job_id: types.JobID, slot
 			crew_member.assigned_to_job_id = 0
 
 			jobs.activate(&crew_member.default_job)
-
-			fmt.printf("Cleared ID %d from Job Slot %d\n", crew_member.id, slot_idx)
 		}
 	}
+
+	calculate_job_values(simulation_state, target_job)
 }
+
+// Buildings
+
+get_building_by_id :: proc(
+	simulation_state: ^SimulationState,
+	id: types.BuildingID,
+) -> ^types.Building {
+	target_building: ^types.Building
+
+	for &building in simulation_state.buildings_list {
+		if building.id == id {
+			target_building = &building
+			break
+		}
+	}
+
+	return target_building
+}
+
+purchase_building :: proc(state: ^SimulationState, building: ^types.Building) {
+	if state.money < building.purchase_price.money ||
+	   state.illegitimate_money < building.purchase_price.illegitimate_money {
+		return
+	}
+
+	state.money -= building.purchase_price.money
+	state.illegitimate_money -= building.purchase_price.illegitimate_money
+	building.owned = true
+}
+
+purchase_building_alt_price :: proc(state: ^SimulationState, building: ^types.Building) {
+	if alt_purchase_price, ok := building.alt_purchase_price.(types.PurchasePrice);
+	   ok &&
+	   state.money >= alt_purchase_price.money &&
+	   state.illegitimate_money >= alt_purchase_price.illegitimate_money {
+		state.money -= alt_purchase_price.money
+		state.illegitimate_money -= alt_purchase_price.illegitimate_money
+		building.owned = true
+	}
+}
+
+buy_upgrade :: proc(
+	state: ^SimulationState,
+	building_id: types.BuildingID,
+	upgrade_id: types.UpgradeID,
+) {
+	building := get_building_by_id(state, building_id)
+
+	for upgrade, i in building.upgrades {
+		if upgrade.id != upgrade_id do continue
+
+		switch effect in upgrade.effect {
+		case types.IncomeMultiplier:
+			building.effect_stats.income_multiplier += effect.multiplier
+		case types.LaunderingAmountMultiplier:
+			building.effect_stats.laundering_amount_multiplier += effect.multiplier
+		case types.LaunderingEfficiencyBonusFlat:
+			building.effect_stats.laundering_efficiency_bonus_flat += effect.bonus
+		}
+
+		ordered_remove(&building.upgrades, i)
+
+		break
+	}
+}
+
+// Stocks
 
 buy_stock :: proc(state: ^SimulationState, company_id: types.CompanyID, amount: int) {
 	stocks.execute_buy_order(

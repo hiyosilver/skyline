@@ -70,9 +70,13 @@ make_crew_member_card :: proc(cm: ^types.CrewMember) -> CrewMemberCard {
 		}
 	}
 
-	visuals := ui.make_panel(
-		base_color,
+	visuals := ui.make_n_patch_texture_panel(
+		textures.ui_textures[.Panel],
 		{320.0, 0.0},
+		6,
+		6,
+		6,
+		6,
 		ui.make_margin(
 			16,
 			16,
@@ -165,8 +169,10 @@ make_crew_member_card :: proc(cm: ^types.CrewMember) -> CrewMemberCard {
 	widget.root = ui.make_simple_button(
 		.OnRelease,
 		rl.Color{255, 255, 255, 0},
+		rl.Color{255, 255, 255, 0},
 		{},
-		ui.make_margin(2, 2, 2, 2, visuals),
+		visuals,
+		0.0,
 	)
 
 	ui.button_set_disabled(widget.root, true)
@@ -225,26 +231,26 @@ update_crew_member_card :: proc(
 	}
 
 	job := &cm.default_job
-	if job.income > 0.0 {
-		if job.illegitimate_income > 0.0 {
+	if job.cached_income > 0.0 {
+		if job.cached_illegitimate_income > 0.0 {
 			ui.label_set_text(
 				widget.income_label,
 				fmt.tprintf(
 					"$%s & ₴%s",
-					global.format_float_thousands(job.income, 2),
-					global.format_float_thousands(job.illegitimate_income, 2),
+					global.format_float_thousands(job.cached_income, 2),
+					global.format_float_thousands(job.cached_illegitimate_income, 2),
 				),
 			)
 		} else {
 			ui.label_set_text(
 				widget.income_label,
-				fmt.tprintf("$%s", global.format_float_thousands(job.income, 2)),
+				fmt.tprintf("$%s", global.format_float_thousands(job.cached_income, 2)),
 			)
 		}
 	} else {
 		ui.label_set_text(
 			widget.income_label,
-			fmt.tprintf("₴%s", global.format_float_thousands(job.illegitimate_income, 2)),
+			fmt.tprintf("₴%s", global.format_float_thousands(job.cached_illegitimate_income, 2)),
 		)
 	}
 
@@ -255,7 +261,7 @@ update_crew_member_card :: proc(
 			fmt.tprintf(
 				"%d ticks (Fail: %s%%)",
 				job.ticks_needed,
-				global.format_float_thousands(f64(details.failure_chance * 100.0), 1),
+				global.format_float_thousands(f64(details.cached_failure_chance * 100.0), 1),
 			),
 		)
 	case:

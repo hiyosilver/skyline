@@ -2,19 +2,10 @@ package buildings
 
 import "../input"
 import "../textures"
+import "../types"
 import "core:c"
 import "core:fmt"
 import rl "vendor:raylib"
-
-Building :: struct {
-	position:       rl.Vector2,
-	texture_id:     textures.BuildingTextureId,
-	texture_offset: rl.Vector2,
-	image_data:     rl.Image,
-	name:           string,
-	hovered:        bool,
-	selected:       bool,
-}
 
 building_shader: rl.Shader
 time_loc: c.int
@@ -38,12 +29,107 @@ load_building_data :: proc(asset_dir: string) {
 	normal_map_loc = rl.GetShaderLocation(building_shader, "normalMap")
 }
 
+generate_buildings :: proc(buildings_list: ^[dynamic]types.Building) {
+	building_crown_plaza := types.Building {
+		id = 100,
+		position = {400.0, 800.0},
+		texture_id = .SkyscraperCrownPlaza,
+		texture_offset = {96.0, 1088.0},
+		image_data = rl.LoadImageFromTexture(textures.building_textures[.SkyscraperCrownPlaza]),
+		name = "Crown Plaza Tower",
+		purchase_price = types.PurchasePrice{1_500_000_000.0, 0.0},
+		base_tick_income = 120_000.0,
+		base_laundering_amount = 25_000.0,
+		base_laundering_efficiency = 0.95,
+		effect_stats = types.BuildingEffectStats {
+			income_multiplier = 1.0,
+			laundering_amount_multiplier = 1.0,
+			laundering_efficiency_bonus_flat = 0.0,
+		},
+	}
+	append(buildings_list, building_crown_plaza)
+
+	building_atlas_hotel := types.Building {
+		id = 200,
+		position = {600.0, 860.0},
+		texture_id = .SkyscraperAtlasHotel,
+		texture_offset = {77.0, 480.0},
+		image_data = rl.LoadImageFromTexture(textures.building_textures[.SkyscraperAtlasHotel]),
+		name = "Atlas Hotel",
+		purchase_price = types.PurchasePrice{150_000_000.0, 0.0},
+		base_tick_income = 35_000.0,
+		base_laundering_amount = 5_000.0,
+		base_laundering_efficiency = 0.8,
+		effect_stats = types.BuildingEffectStats {
+			income_multiplier = 1.0,
+			laundering_amount_multiplier = 1.0,
+			laundering_efficiency_bonus_flat = 0.0,
+		},
+	}
+	append(buildings_list, building_atlas_hotel)
+
+	hotdog_stand_upgrades := make([dynamic]types.Upgrade)
+	append(
+		&hotdog_stand_upgrades,
+		types.Upgrade {
+			id = 301,
+			name = "TEST: Increase income",
+			description = "Increases income by 10%",
+			cost = 60.0,
+			effect = types.IncomeMultiplier{0.1},
+		},
+	)
+
+	append(
+		&hotdog_stand_upgrades,
+		types.Upgrade {
+			id = 302,
+			name = "TEST: Increase laundering amount",
+			description = "Increases laundering amount by 10%",
+			cost = 75.0,
+			effect = types.LaunderingAmountMultiplier{0.1},
+		},
+	)
+
+	append(
+		&hotdog_stand_upgrades,
+		types.Upgrade {
+			id = 303,
+			name = "TEST: Increase laundering efficiency",
+			description = "Increases laundering efficiency by a flat 5%",
+			cost = 25.0,
+			effect = types.LaunderingEfficiencyBonusFlat{0.05},
+		},
+	)
+
+	building_hotdog_stand := types.Building {
+		id = 300,
+		position = {750.0, 950.0},
+		texture_id = .HotdogStand,
+		texture_offset = {15.0, 15.0},
+		image_data = rl.LoadImageFromTexture(textures.building_textures[.HotdogStand]),
+		name = "Hotdog stand",
+		purchase_price = types.PurchasePrice{10.0, 0.0},
+		alt_purchase_price = types.PurchasePrice{5_000.0, 10_000.0},
+		base_tick_income = 10.0,
+		base_laundering_amount = 5.0,
+		base_laundering_efficiency = 0.4,
+		effect_stats = types.BuildingEffectStats {
+			income_multiplier = 1.0,
+			laundering_amount_multiplier = 1.0,
+			laundering_efficiency_bonus_flat = 0.0,
+		},
+		upgrades = hotdog_stand_upgrades,
+	}
+	append(buildings_list, building_hotdog_stand)
+}
+
 @(fini)
 finish :: proc() {
 	rl.UnloadShader(building_shader)
 }
 
-draw_building :: proc(building: ^Building) {
+draw_building :: proc(building: ^types.Building) {
 	building_texture := textures.building_textures[building.texture_id]
 
 	rl.BeginShaderMode(building_shader)
@@ -59,7 +145,7 @@ draw_building :: proc(building: ^Building) {
 		rl.ShaderUniformDataType.VEC2,
 	)
 
-	tint_color := [3]f32{0.15, 0.75, 0.0}
+	tint_color := building.owned ? [3]f32{0.15, 0.75, 0.0} : [3]f32{1.0, 0.9, 0.3}
 	rl.SetShaderValue(building_shader, tint_color_loc, &tint_color, rl.ShaderUniformDataType.VEC3)
 
 	hovered: c.int = building.hovered ? 1 : 0
@@ -86,7 +172,7 @@ draw_building :: proc(building: ^Building) {
 }
 
 is_building_hovered :: proc(
-	building: ^Building,
+	building: ^types.Building,
 	input_data: ^input.RawInput,
 	camera: ^rl.Camera2D,
 ) -> bool {

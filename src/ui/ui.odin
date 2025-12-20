@@ -34,6 +34,7 @@ ComponentVariant :: union {
 	LoadingBar,
 	Graph,
 	RangeIndicator,
+	NPatchTexturePanel,
 }
 
 make_component :: proc(variant: Component) -> ^Component {
@@ -109,6 +110,12 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 			max(component.min_size.y, desired_size.y),
 		}
 	case TexturePanel:
+		desired_size = get_desired_size(v.child)
+		desired_size = {
+			max(component.min_size.x, desired_size.x),
+			max(component.min_size.y, desired_size.y),
+		}
+	case NPatchTexturePanel:
 		desired_size = get_desired_size(v.child)
 		desired_size = {
 			max(component.min_size.x, desired_size.x),
@@ -366,6 +373,11 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 			arrange_components(v.child, actual_rect)
 		}
 
+	case NPatchTexturePanel:
+		if v.child != nil {
+			arrange_components(v.child, actual_rect)
+		}
+
 	case Pill:
 		if v.child != nil {
 			child_rect := rl.Rectangle {
@@ -511,6 +523,12 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 		}
 
 	case TexturePanel:
+		captured = rl.CheckCollisionPointRec(mouse_pos, rect)
+		if v.child != nil {
+			if handle_input_recursive(v.child, input_data) do captured = true
+		}
+
+	case NPatchTexturePanel:
 		captured = rl.CheckCollisionPointRec(mouse_pos, rect)
 		if v.child != nil {
 			if handle_input_recursive(v.child, input_data) do captured = true
@@ -789,6 +807,28 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 		}
 		rl.DrawTexturePro(v.texture, source, dest, {}, 0, v.tint_color)
 		draw_components_recursive(v.child, debug)
+	case NPatchTexturePanel:
+		texture := v.texture
+		source_rectangle := rl.Rectangle{0, 0, f32(texture.width), f32(texture.height)}
+
+		n_patch_info := rl.NPatchInfo {
+			source_rectangle,
+			v.left,
+			v.top,
+			v.right,
+			v.bottom,
+			.NINE_PATCH,
+		}
+
+		rl.DrawTextureNPatch(
+			texture,
+			n_patch_info,
+			{component.position.x, component.position.y, component.size.x, component.size.y},
+			{0, 0},
+			0.0,
+			rl.WHITE,
+		)
+		draw_components_recursive(v.child, debug)
 	case Pill:
 		offset := component.size.y * 0.5
 		rl.DrawCircleV(component.position + {offset, offset}, offset, v.color)
@@ -811,7 +851,7 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 		case .Released:
 			bg_color = v.color_hovered
 		case .Disabled:
-			bg_color = rl.GRAY
+			bg_color = v.color_disabled
 		}
 
 		rl.DrawRectangleV(component.position, component.size, bg_color)
@@ -1051,46 +1091,34 @@ destroy_components_recursive :: proc(component: ^Component) {
 		delete(v.children)
 	case AnchorContainer:
 		destroy_components_recursive(v.child)
-	//fmt.println("Freeing AnchorContainer!")
 	case BoxContainer:
 		for child in v.children {
 			destroy_components_recursive(child)
 		}
 		delete(v.children)
-	//fmt.println("Freeing BoxContainer!")
 	case MarginContainer:
 		destroy_components_recursive(v.child)
-	//fmt.println("Freeing MarginContainer!")
 	case ScrollContainer:
 		destroy_components_recursive(v.child)
-	//fmt.println("Freeing ScrollContainer!")
 	case Panel:
 		destroy_components_recursive(v.child)
-	//fmt.println("Freeing Panel!")
 	case TexturePanel:
 		destroy_components_recursive(v.child)
-	//fmt.println("Freeing TexturePanel!")
+	case NPatchTexturePanel:
+		destroy_components_recursive(v.child)
 	case Pill:
 		destroy_components_recursive(v.child)
-	//fmt.println("Freeing Pill!")
 	case SimpleButton:
 		destroy_components_recursive(v.child)
-	//fmt.println("Freeing SimpleButton!")
 	case RadioButton:
 		delete(v.connected_radio_buttons)
-	//fmt.println("Freeing RadioButton!")
 	case CheckBox:
-	//fmt.println("Freeing CheckBox!")
 	case Label:
 		delete(v.text)
-	//fmt.println("Freeing Label!")
 	case LoadingBar:
-	//fmt.println("Freeing LoadingBar!")
 	case Graph:
 		destroy_components_recursive(v.child)
-	//fmt.println("Freeing Graph!")
 	case RangeIndicator:
-	//fmt.println("Freeing RangeIndicator!")
 	}
 	free(component)
 }

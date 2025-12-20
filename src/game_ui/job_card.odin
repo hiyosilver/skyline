@@ -1,7 +1,6 @@
 package game_ui
 
 import "../global"
-import "../jobs"
 import "../textures"
 import "../types"
 import "../ui"
@@ -31,24 +30,28 @@ JobSlotDisplay :: struct {
 make_job_card :: proc(job: ^types.Job) -> JobCard {
 	widget: JobCard = {}
 
-	base_color, button_color: rl.Color
+	button_color, button_color_disabled: rl.Color
+	texture: rl.Texture
 
 	widget.buyin_price_label = ui.make_label("", global.font_small_italic, 18.0, rl.BLACK, .Center)
 	buyin_pill := ui.make_pill(rl.RAYWHITE, {}, widget.buyin_price_label)
 
 	if _, ok := job.details.(types.BuyinJob); ok {
-		base_color = rl.Color{160, 64, 32, 255}
 		button_color = rl.Color{224, 64, 16, 255}
+		button_color_disabled = rl.Color{160, 32, 8, 255}
+		texture = textures.ui_textures[.PanelRed]
 	} else {
-		base_color = rl.GRAY
-		button_color = rl.DARKGRAY
+		button_color = rl.GRAY
+		button_color_disabled = rl.DARKGRAY
 		buyin_pill.state = .Inactive
+		texture = textures.ui_textures[.Panel]
 	}
 
 	widget.button_label = ui.make_label("", global.font, 24.0, rl.RAYWHITE)
 	widget.start_button = ui.make_simple_button(
 		.OnRelease,
 		button_color,
+		button_color_disabled,
 		{80.0, 0.0},
 		widget.button_label,
 	)
@@ -93,6 +96,7 @@ make_job_card :: proc(job: ^types.Job) -> JobCard {
 
 			slot_button := ui.make_simple_button(
 				.OnRelease,
+				rl.GRAY,
 				rl.DARKGRAY,
 				{50, 50},
 				ui.make_box(.Vertical, .Center, .Center, 2, status_label, icon_panel),
@@ -110,9 +114,13 @@ make_job_card :: proc(job: ^types.Job) -> JobCard {
 		}
 	}
 
-	widget.root = ui.make_panel(
-		base_color,
+	widget.root = ui.make_n_patch_texture_panel(
+		texture,
 		{320.0, 120.0},
+		6,
+		6,
+		6,
+		6,
 		ui.make_margin(
 			16,
 			16,
@@ -168,12 +176,9 @@ update_job_card :: proc(
 	tick_timer: f32,
 	tick_speed: f32,
 	crew_lookup: map[types.CrewMemberID]^types.CrewMember,
+	money: f64,
+	illegitimate_money: f64,
 ) {
-	final_income, final_illegitimate_income, final_failure_chance := jobs.calculate_job_values(
-		job,
-		crew_lookup,
-	)
-
 	ui.label_set_text(
 		widget.level_label,
 		fmt.tprintf(
@@ -191,30 +196,44 @@ update_job_card :: proc(
 		ui.label_set_text(widget.name_label, job.name)
 	}
 
-	if final_income > 0.0 {
-		if final_illegitimate_income > 0.0 {
+	if job.cached_income > 0.0 {
+		if job.cached_illegitimate_income > 0.0 {
 			ui.label_set_text(
 				widget.income_label,
 				fmt.tprintf(
 					"$%s & ₴%s",
-					global.format_float_thousands(final_income, 2),
-					global.format_float_thousands(final_illegitimate_income, 2),
+					global.format_float_thousands(job.cached_income, 2),
+					global.format_float_thousands(job.cached_illegitimate_income, 2),
 				),
 			)
 		} else {
 			ui.label_set_text(
 				widget.income_label,
-				fmt.tprintf("$%s", global.format_float_thousands(final_income, 2)),
+				fmt.tprintf("$%s", global.format_float_thousands(job.cached_income, 2)),
 			)
 		}
 	} else {
 		ui.label_set_text(
 			widget.income_label,
-			fmt.tprintf("₴%s", global.format_float_thousands(final_illegitimate_income, 2)),
+			fmt.tprintf("₴%s", global.format_float_thousands(job.cached_illegitimate_income, 2)),
 		)
 	}
 
+	can_afford := true
+
 	if details, ok := job.details.(types.BuyinJob); ok {
+		if money < details.buyin_price || illegitimate_money < details.illegitimate_buyin_price {
+			can_afford = false
+		}
+
+		should_disable := !can_afford || job.is_active || job.is_ready
+		ui.button_set_disabled(widget.start_button, should_disable)
+		if should_disable {
+			ui.label_set_color(widget.start_button.variant.(ui.SimpleButton).child, rl.GRAY)
+		} else {
+			ui.label_set_color(widget.start_button.variant.(ui.SimpleButton).child, rl.RAYWHITE)
+		}
+
 		for slot_data, i in details.crew_member_slots {
 			ui_slot := widget.crew_slots[i]
 
@@ -241,7 +260,7 @@ update_job_card :: proc(
 			fmt.tprintf(
 				"%d ticks (Failure chance: %s%% / tick)",
 				job.ticks_needed,
-				global.format_float_thousands(f64(final_failure_chance * 100.0), 2),
+				global.format_float_thousands(f64(details.cached_failure_chance * 100.0), 2),
 			),
 		)
 		if details.buyin_price > 0.0 {

@@ -6,6 +6,7 @@ import rl "vendor:raylib"
 BuildingTextureId :: enum {
 	SkyscraperCrownPlaza,
 	SkyscraperAtlasHotel,
+	HotdogStand,
 }
 
 UiTextureId :: enum {
@@ -14,6 +15,8 @@ UiTextureId :: enum {
 	Square,
 	Box,
 	Tick,
+	Panel,
+	PanelRed,
 }
 
 IconTextureId :: enum {
@@ -39,6 +42,8 @@ load_textures :: proc(asset_dir: string) {
 			texture_file_path = fmt.caprintf("%s/images/skyscraper_crown_plaza.png", asset_dir)
 		case .SkyscraperAtlasHotel:
 			texture_file_path = fmt.caprintf("%s/images/atlas_hotel.png", asset_dir)
+		case .HotdogStand:
+			texture_file_path = fmt.caprintf("%s/images/hotdog_stand.png", asset_dir)
 		}
 
 		tex := rl.LoadTexture(texture_file_path)
@@ -64,6 +69,10 @@ load_textures :: proc(asset_dir: string) {
 			texture_file_path = fmt.caprintf("%s/images/ui/box.png", asset_dir)
 		case .Tick:
 			texture_file_path = fmt.caprintf("%s/images/ui/tick.png", asset_dir)
+		case .Panel:
+			texture_file_path = fmt.caprintf("%s/images/ui/panel.png", asset_dir)
+		case .PanelRed:
+			texture_file_path = fmt.caprintf("%s/images/ui/panel_red.png", asset_dir)
 		}
 		tex := rl.LoadTexture(texture_file_path)
 		rl.GenTextureMipmaps(&tex)
