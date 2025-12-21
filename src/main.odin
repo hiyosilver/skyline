@@ -85,31 +85,31 @@ game_state: GameState
 
 main :: proc() {
 	/*
-    track: mem.Tracking_Allocator
-    mem.tracking_allocator_init(&track, context.allocator)
-    defer mem.tracking_allocator_destroy(&track)
-    context.allocator = mem.tracking_allocator(&track)
+	track: mem.Tracking_Allocator
+	mem.tracking_allocator_init(&track, context.allocator)
+	defer mem.tracking_allocator_destroy(&track)
+	context.allocator = mem.tracking_allocator(&track)
 
-    defer {
-        if len(track.allocation_map) > 0 {
-            fmt.eprintf("=== %v allocations not freed: ===\n", len(track.allocation_map))
-            for _, entry in track.allocation_map {
-                fmt.eprintf("- %v bytes @ %v\n", entry.size, entry.location)
+	defer {
+		if len(track.allocation_map) > 0 {
+			fmt.eprintf("=== %v allocations not freed: ===\n", len(track.allocation_map))
+			for _, entry in track.allocation_map {
+				fmt.eprintf("- %v bytes @ %v\n", entry.size, entry.location)
 
-                if entry.size < 500 {
-                    str := string(mem.slice_ptr(cast(^u8)entry.memory, entry.size))
-                    fmt.eprintf("  Content: %q\n", str)
-                }
-            }
-        }
-        if len(track.bad_free_array) > 0 {
-            fmt.eprintf("=== %v incorrect frees: ===\n", len(track.bad_free_array))
-            for entry in track.bad_free_array {
-                fmt.eprintf("- %p @ %v\n", entry.memory, entry.location)
-            }
-        }
-    }
-    */
+				if entry.size < 500 {
+					str := string(mem.slice_ptr(cast(^u8)entry.memory, entry.size))
+					fmt.eprintf("  Content: %q\n", str)
+				}
+			}
+		}
+		if len(track.bad_free_array) > 0 {
+			fmt.eprintf("=== %v incorrect frees: ===\n", len(track.bad_free_array))
+			for entry in track.bad_free_array {
+				fmt.eprintf("- %p @ %v\n", entry.memory, entry.location)
+			}
+		}
+	}
+	*/
 
 	exe_path = os.args[0]
 	exe_dir = filepath.dir(exe_path)
@@ -424,15 +424,21 @@ clear_buffered_inputs :: proc(frame_input: ^input.RawInput) {
 }
 
 cleanup :: proc() {
-	for &building in simulation_state.buildings_list {
-		rl.UnloadImage(building.image_data)
-	}
-	delete(simulation_state.buildings_list)
-	delete(simulation_state.job_entries)
-	delete(simulation_state.crew_roster)
-	delete(simulation_state.tick_stats_buffer)
+	simulation.cleanup(&simulation_state)
+	textures.cleanup()
+	buildings.cleanup()
 
+	delete(game_state.crew_view_models)
+	for &job_card in game_state.job_view_models {
+		game_ui.destroy_job_card(&job_card)
+	}
+	delete(game_state.job_view_models)
+
+	stocks.delete_stock_portfolio(&simulation_state.stock_portfolio)
 	stocks.close_market(&simulation_state.market)
+
+	game_ui.destroy_stock_window(&game_state.ui.stock_window)
+	game_ui.destroy_building_info_panel(&game_state.ui.building_info_panel)
 
 	ui.destroy_components_recursive(game_state.ui.ui_root)
 }
@@ -664,6 +670,13 @@ handle_building_info_panel_interactions :: proc() {
 			)
 		}
 
+		if ui.check_box_was_toggled(game_state.ui.building_info_panel.laundering_check_box) {
+			simulation.queue_action(
+				&simulation_state,
+				types.ActionBuildingToggleLaundering{building_id = building.id},
+			)
+		}
+
 		for row in game_state.ui.building_info_panel.upgrade_rows {
 			if ui.button_was_clicked(row.button) {
 				simulation.queue_action(
@@ -787,6 +800,7 @@ sync_ui_visuals :: proc() {
 		&game_state.ui.stock_window,
 		&simulation_state.market,
 		&simulation_state.stock_portfolio,
+		simulation_state.money,
 	)
 
 	for &building in simulation_state.buildings_list {

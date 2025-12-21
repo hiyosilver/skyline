@@ -54,7 +54,7 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 
 	desired_size: rl.Vector2
 
-	switch v in component.variant {
+	switch &v in component.variant {
 	case StackContainer:
 		for child in v.children {
 			child_size := get_desired_size(child)
@@ -138,7 +138,8 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 			max(component.min_size.y, desired_size.y),
 		}
 	case Label:
-		desired_size = rl.MeasureTextEx(v.font, v.text, v.font_size, 2.0)
+		text := cstring(&v.text_buffer[0])
+		desired_size = rl.MeasureTextEx(v.font, text, v.font_size, 2.0)
 	case RadioButton, CheckBox, LoadingBar:
 		desired_size = component.min_size
 	case Graph:
@@ -638,7 +639,7 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 	if component == nil || component.state != .Active do return
 
-	switch v in component.variant {
+	switch &v in component.variant {
 	case StackContainer:
 		for child in v.children {
 			draw_components_recursive(child, debug)
@@ -966,7 +967,9 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 			rl.DrawTexturePro(box_texture, source, dest, {}, 0, box_color)
 		}
 	case Label:
-		text_dims := rl.MeasureTextEx(v.font, v.text, v.font_size, 2.0)
+		text := cstring(&v.text_buffer[0])
+
+		text_dims := rl.MeasureTextEx(v.font, text, v.font_size, 2.0)
 
 		pos := component.position
 
@@ -987,7 +990,7 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 		case:
 		}
 
-		rl.DrawTextEx(v.font, v.text, pos, v.font_size, 2.0, v.color)
+		rl.DrawTextEx(v.font, text, pos, v.font_size, 2.0, v.color)
 	case LoadingBar:
 		rl.DrawRectangleV(component.position, component.size, v.background_color)
 
@@ -1114,7 +1117,6 @@ destroy_components_recursive :: proc(component: ^Component) {
 		delete(v.connected_radio_buttons)
 	case CheckBox:
 	case Label:
-		delete(v.text)
 	case LoadingBar:
 	case Graph:
 		destroy_components_recursive(v.child)

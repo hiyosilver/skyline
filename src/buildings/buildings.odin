@@ -18,7 +18,7 @@ normal_map_loc: c.int
 load_building_data :: proc(asset_dir: string) {
 	building_shader = rl.LoadShader(
 		nil,
-		fmt.caprintf("%s/shaders/building_shader.glsl", asset_dir),
+		fmt.ctprintf("%s/shaders/building_shader.glsl", asset_dir),
 	)
 
 	time_loc = rl.GetShaderLocation(building_shader, "time")
@@ -124,8 +124,7 @@ generate_buildings :: proc(buildings_list: ^[dynamic]types.Building) {
 	append(buildings_list, building_hotdog_stand)
 }
 
-@(fini)
-finish :: proc() {
+cleanup :: proc() {
 	rl.UnloadShader(building_shader)
 }
 

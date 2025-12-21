@@ -27,6 +27,10 @@ JobSlotDisplay :: struct {
 	icon_panel:   ^ui.Component,
 }
 
+destroy_job_card :: proc(job_card: ^JobCard) {
+	delete(job_card.crew_slots)
+}
+
 make_job_card :: proc(job: ^types.Job) -> JobCard {
 	widget: JobCard = {}
 

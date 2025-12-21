@@ -5,6 +5,7 @@ import "../jobs"
 import "../stocks"
 import "../types"
 import "core:fmt"
+import rl "vendor:raylib"
 
 ChangeOnTick :: enum {
 	Maintained,
@@ -52,9 +53,6 @@ SimulationState :: struct {
 	buildings_list:            [dynamic]types.Building,
 }
 
-queue_action :: proc(state: ^SimulationState, action: types.GameAction) {
-	append(&state.pending_actions, action)
-}
 
 init :: proc() -> SimulationState {
 	simulation_state: SimulationState
@@ -77,6 +75,31 @@ init :: proc() -> SimulationState {
 	simulation_state.stock_portfolio = stocks.create_stock_portfolio(&simulation_state.market)
 
 	return simulation_state
+}
+
+cleanup :: proc(state: ^SimulationState) {
+	for &building in state.buildings_list {
+		rl.UnloadImage(building.image_data)
+		delete(building.upgrades)
+	}
+	delete(state.buildings_list)
+
+	for &job in state.job_entries {
+		details, is_buyin := job.details.(types.BuyinJob)
+
+		if !is_buyin do continue
+
+		delete(details.crew_member_slots)
+	}
+	delete(state.job_entries)
+
+	delete(state.crew_roster)
+	delete(state.tick_stats_buffer)
+	delete(state.pending_actions)
+}
+
+queue_action :: proc(state: ^SimulationState, action: types.GameAction) {
+	append(&state.pending_actions, action)
 }
 
 update :: proc(state: ^SimulationState, delta_time: f32) {
@@ -111,6 +134,8 @@ process_action :: proc(state: ^SimulationState, action: types.GameAction) {
 		purchase_building(state, a.building_id)
 	case types.ActionPurchaseBuildingAltPrice:
 		purchase_building_alt_price(state, a.building_id)
+	case types.ActionBuildingToggleLaundering:
+		toggle_building_laundering(state, a.building_id)
 	case types.ActionBuyUpgrade:
 		buy_upgrade(state, a.building_id, a.upgrade_id)
 	}
@@ -174,6 +199,8 @@ tick :: proc(simulation_state: ^SimulationState) {
 
 		commercial_revenue += building.base_tick_income * building.effect_stats.income_multiplier
 
+		if !building.is_laundering do continue
+
 		laundering_flow := min(
 			simulation_state.illegitimate_money,
 			building.base_laundering_amount * building.effect_stats.laundering_amount_multiplier,
@@ -184,8 +211,12 @@ tick :: proc(simulation_state: ^SimulationState) {
 
 			commercial_revenue +=
 				laundering_flow *
-				(building.base_laundering_efficiency +
-						building.effect_stats.laundering_efficiency_bonus_flat)
+				clamp(
+					building.base_laundering_efficiency +
+					building.effect_stats.laundering_efficiency_bonus_flat,
+					0.0,
+					1.0,
+				)
 		}
 	}
 
@@ -524,6 +555,13 @@ purchase_building_alt_price :: proc(state: ^SimulationState, building_id: types.
 		state.illegitimate_money -= alt_purchase_price.illegitimate_money
 		building.owned = true
 	}
+}
+
+@(private = "file")
+toggle_building_laundering :: proc(state: ^SimulationState, building_id: types.BuildingID) {
+	building := get_building_by_id(state, building_id)
+
+	building.is_laundering = !building.is_laundering
 }
 
 @(private = "file")

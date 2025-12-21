@@ -100,8 +100,7 @@ load_textures :: proc(asset_dir: string) {
 	}
 }
 
-@(fini)
-unload_textures :: proc() {
+cleanup :: proc() {
 	for _, tex in building_textures {
 		rl.UnloadTexture(tex)
 	}

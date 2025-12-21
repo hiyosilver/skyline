@@ -14,18 +14,23 @@ UpgradeRow :: struct {
 }
 
 BuildingInfoPanel :: struct {
-	root:                ^ui.Component,
-	name_label:          ^ui.Component,
-	income_label:        ^ui.Component,
-	laundering_label:    ^ui.Component,
-	owned_label:         ^ui.Component,
-	purchase_button_box: ^ui.Component,
-	purchase_button:     ^ui.Component,
-	or_label:            ^ui.Component,
-	alt_purchase_button: ^ui.Component,
-	upgrade_button_box:  ^ui.Component,
-	upgrade_rows:        [dynamic]UpgradeRow,
-	current_building_id: types.BuildingID,
+	root:                 ^ui.Component,
+	name_label:           ^ui.Component,
+	income_label:         ^ui.Component,
+	laundering_check_box: ^ui.Component,
+	laundering_label:     ^ui.Component,
+	owned_label:          ^ui.Component,
+	purchase_button_box:  ^ui.Component,
+	purchase_button:      ^ui.Component,
+	or_label:             ^ui.Component,
+	alt_purchase_button:  ^ui.Component,
+	upgrade_button_box:   ^ui.Component,
+	upgrade_rows:         [dynamic]UpgradeRow,
+	current_building_id:  types.BuildingID,
+}
+
+destroy_building_info_panel :: proc(building_info_panel: ^BuildingInfoPanel) {
+	delete(building_info_panel.upgrade_rows)
 }
 
 make_building_info_panel :: proc() -> BuildingInfoPanel {
@@ -36,7 +41,9 @@ make_building_info_panel :: proc() -> BuildingInfoPanel {
 
 	widget.name_label = ui.make_label("", global.font, 24.0, rl.RAYWHITE, .Left)
 	widget.income_label = ui.make_label("", global.font_small, 18.0, rl.RAYWHITE, .Left)
-	widget.laundering_label = ui.make_label("", global.font_small, 18.0, rl.RAYWHITE, .Left)
+	widget.laundering_check_box = ui.make_check_box()
+	widget.laundering_check_box.state = .Inactive
+	widget.laundering_label = ui.make_label("", global.font_small, 18.0, rl.GRAY, .Left)
 	widget.owned_label = ui.make_label(
 		"Owned",
 		global.font_small_italic,
@@ -101,7 +108,14 @@ make_building_info_panel :: proc() -> BuildingInfoPanel {
 					4,
 					labels_box,
 					widget.income_label,
-					widget.laundering_label,
+					ui.make_box(
+						.Horizontal,
+						.Start,
+						.Center,
+						2,
+						widget.laundering_check_box,
+						widget.laundering_label,
+					),
 					widget.purchase_button_box,
 					widget.upgrade_button_box,
 				),
@@ -179,11 +193,18 @@ update_building_info_panel :: proc(
 		),
 	)
 
+	if building.is_laundering {
+		ui.label_set_color(widget.laundering_label, rl.RAYWHITE)
+	} else {
+		ui.label_set_color(widget.laundering_label, rl.GRAY)
+	}
+
 	if building.owned {
 		widget.purchase_button_box.state = .Inactive
 		ui.button_reset_state(widget.purchase_button)
 		ui.button_reset_state(widget.alt_purchase_button)
 		widget.owned_label.state = .Active
+		widget.laundering_check_box.state = .Active
 	} else {
 		widget.purchase_button_box.state = .Active
 		widget.owned_label.state = .Hidden

@@ -123,6 +123,7 @@ Building :: struct {
 	base_tick_income:           f64,
 	base_laundering_amount:     f64,
 	base_laundering_efficiency: f64,
+	is_laundering:              bool,
 	effect_stats:               BuildingEffectStats,
 	upgrades:                   [dynamic]Upgrade,
 

@@ -840,6 +840,10 @@ create_stock_portfolio :: proc(market: ^Market) -> StockPortfolio {
 	return StockPortfolio{stocks_data}
 }
 
+delete_stock_portfolio :: proc(portfolio: ^StockPortfolio) {
+	delete(portfolio.stocks)
+}
+
 get_available_shares :: proc(company: ^Company, stock_info: ^StockInfo) -> int {
 	return(
 		int(f64(company.shares_outstanding) * company.float_percentage) -
@@ -912,8 +916,4 @@ execute_sell_order :: proc(
 	period_income^ += payout - cost_basis
 
 	return .Success
-}
-
-delete_stock_portfolio :: proc(portfolio: ^StockPortfolio) {
-	delete(portfolio.stocks)
 }

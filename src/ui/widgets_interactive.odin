@@ -193,3 +193,13 @@ check_box_was_activated :: proc(component: ^Component) -> bool {
 
 	return false
 }
+
+check_box_was_toggled :: proc(component: ^Component) -> bool {
+	if component == nil do return false
+
+	if check_box, ok := component.variant.(CheckBox); ok {
+		return check_box.state == .Released
+	}
+
+	return false
+}

@@ -33,6 +33,10 @@ ActionPurchaseBuildingAltPrice :: struct {
 	building_id: BuildingID,
 }
 
+ActionBuildingToggleLaundering :: struct {
+	building_id: BuildingID,
+}
+
 ActionBuyUpgrade :: struct {
 	building_id: BuildingID,
 	upgrade_id:  UpgradeID,
@@ -46,5 +50,6 @@ GameAction :: union {
 	ActionSellStock,
 	ActionPurchaseBuilding,
 	ActionPurchaseBuildingAltPrice,
+	ActionBuildingToggleLaundering,
 	ActionBuyUpgrade,
 }

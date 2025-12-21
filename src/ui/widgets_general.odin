@@ -1,6 +1,6 @@
 package ui
 
-import "core:strings"
+import "core:mem"
 import rl "vendor:raylib"
 
 Panel :: struct {
@@ -129,11 +129,11 @@ make_pill :: proc(color: rl.Color, min_size: rl.Vector2, child: ^Component = nil
 }
 
 Label :: struct {
-	text:      cstring,
-	font:      rl.Font,
-	font_size: f32,
-	color:     rl.Color,
-	alignment: AnchorType,
+	text_buffer: [256]u8,
+	font:        rl.Font,
+	font_size:   f32,
+	color:       rl.Color,
+	alignment:   AnchorType,
 }
 
 make_label :: proc(
@@ -144,13 +144,17 @@ make_label :: proc(
 	alignment: AnchorType = .Center,
 ) -> ^Component {
 	c := new(Component)
-	c.variant = Label {
-		text      = strings.clone_to_cstring(text),
+	lbl := Label {
 		font      = font,
 		font_size = font_size,
 		color     = color,
 		alignment = alignment,
 	}
+
+	copy(lbl.text_buffer[:], text)
+
+	c.variant = lbl
+
 	return c
 }
 
@@ -158,11 +162,8 @@ label_set_text :: proc(component: ^Component, text: string) {
 	if component == nil do return
 
 	if label, ok := &component.variant.(Label); ok {
-		new_text := strings.clone_to_cstring(text)
-		if label.text == new_text do return
-
-		delete(label.text)
-		label.text = new_text
+		mem.zero(&label.text_buffer[0], len(label.text_buffer))
+		copy(label.text_buffer[:], text)
 
 		component.desired_size = {0, 0}
 	}

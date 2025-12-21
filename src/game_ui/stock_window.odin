@@ -36,7 +36,6 @@ StockWindow :: struct {
 	buy_all_button:                   ^ui.Component,
 	buy_all_amount_label:             ^ui.Component,
 	sell_all_button:                  ^ui.Component,
-	sell_all_profit_label:            ^ui.Component,
 	DEBUG_earnings_per_share_label:   ^ui.Component,
 	DEBUG_sentiment_multiplier_label: ^ui.Component,
 	DEBUG_volatility_label:           ^ui.Component,
@@ -45,6 +44,15 @@ StockWindow :: struct {
 	DEBUG_growth_rate_label:          ^ui.Component,
 	DEBUG_credit_rating_label:        ^ui.Component,
 	DEBUG_payout_ratio_label:         ^ui.Component,
+}
+
+destroy_stock_window :: proc(stock_window: ^StockWindow) {
+	delete(stock_window.company_list)
+	delete(stock_window.rating_labels)
+	delete(stock_window.status_texture_panels)
+	delete(stock_window.stock_price_labels)
+	delete(stock_window.stock_price_graphs)
+	delete(stock_window.stock_price_range_indicators)
 }
 
 make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
@@ -168,9 +176,15 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 		rl.GRAY,
 		rl.DARKGRAY,
 		{100.0, 0.0},
-		ui.make_label("Buy all", global.font, 24, rl.BLACK),
+		ui.make_box(
+			.Vertical,
+			.Center,
+			.Center,
+			2,
+			ui.make_label("Buy all", global.font, 24, rl.BLACK),
+			widget.buy_all_amount_label,
+		),
 	)
-	widget.sell_all_profit_label = ui.make_label("-", global.font_tiny, 14, rl.BLACK)
 	widget.sell_all_button = ui.make_simple_button(
 		.OnRelease,
 		rl.GRAY,
@@ -312,6 +326,7 @@ update_stock_window :: proc(
 	window: ^StockWindow,
 	market: ^stocks.Market,
 	portfolio: ^stocks.StockPortfolio,
+	money: f64,
 ) {
 	for id, i in window.company_list {
 		company := &market.companies[id]
@@ -489,6 +504,10 @@ update_stock_window :: proc(
 			window.profit_loss_label.state = .Inactive
 		}
 
+		ui.label_set_text(
+			window.buy_all_amount_label,
+			fmt.tprintf("%d", int(money / company.current_price)),
+		)
 
 		ui.label_set_text(
 			window.DEBUG_earnings_per_share_label,
