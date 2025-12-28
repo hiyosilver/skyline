@@ -85,11 +85,7 @@ cleanup :: proc(state: ^SimulationState) {
 	delete(state.buildings_list)
 
 	for &job in state.job_entries {
-		details, is_buyin := job.details.(types.BuyinJob)
-
-		if !is_buyin do continue
-
-		delete(details.crew_member_slots)
+		delete(job.crew_member_slots)
 	}
 	delete(state.job_entries)
 
@@ -157,10 +153,10 @@ tick :: proc(simulation_state: ^SimulationState) {
 				tick_stats.income += job.cached_income
 				tick_stats.illegitimate_income += job.cached_illegitimate_income
 
-				#partial switch &d in job.details {
-				case types.BuyinJob:
+				if len(job.crew_member_slots) > 0 ||
+				   job.buyin_price > 0 ||
+				   job.illegitimate_buyin_price > 0 {
 					jobs.deactivate(&job)
-					remove_job(simulation_state, job.id)
 				}
 			} else if job_result == .Failed {
 				jobs.deactivate(&job)
@@ -359,11 +355,8 @@ remove_job :: proc(simulation_state: ^SimulationState, job_id: types.JobID) {
 	#reverse for &job, i in simulation_state.job_entries {
 		if job.id != job_id do continue
 
-		#partial switch &details in job.details {
-		case types.BuyinJob:
-			for slot_index in 0 ..< len(details.crew_member_slots) {
-				clear_crew(simulation_state, job.id, slot_index)
-			}
+		for slot_index in 0 ..< len(job.crew_member_slots) {
+			clear_crew(simulation_state, job.id, slot_index)
 		}
 
 		ordered_remove(&simulation_state.job_entries, i)
@@ -377,15 +370,12 @@ interact_toggle_job :: proc(simulation_state: ^SimulationState, job_index: int) 
 	job := &simulation_state.job_entries[job_index]
 
 	if !job.is_active {
-		#partial switch d in job.details {
-		case types.BuyinJob:
-			if simulation_state.money < d.buyin_price ||
-			   simulation_state.illegitimate_money < d.illegitimate_buyin_price {
-				return
-			}
-			simulation_state.money -= d.buyin_price
-			simulation_state.illegitimate_money -= d.illegitimate_buyin_price
+		if simulation_state.money < job.buyin_price ||
+		   simulation_state.illegitimate_money < job.illegitimate_buyin_price {
+			return
 		}
+		simulation_state.money -= job.buyin_price
+		simulation_state.illegitimate_money -= job.illegitimate_buyin_price
 	}
 
 	is_now_active := jobs.toggle_state(job)
@@ -442,33 +432,27 @@ assign_crew :: proc(
 	crew_member := get_crew_member_by_id(simulation_state, crew_id)
 	if crew_member == nil || crew_member.assigned_to_job_id != 0 do return false
 
-	if details, ok := &target_job.details.(types.BuyinJob); ok {
-		if slot_idx < len(details.crew_member_slots) {
-			details.crew_member_slots[slot_idx].assigned_crew_member = crew_id
-			crew_member.assigned_to_job_id = target_job.id
+	if slot_idx < len(target_job.crew_member_slots) {
+		target_job.crew_member_slots[slot_idx].assigned_crew_member = crew_id
+		crew_member.assigned_to_job_id = target_job.id
 
-			jobs.deactivate(&crew_member.default_job)
+		jobs.deactivate(&crew_member.default_job)
 
-			calculate_job_values(simulation_state, target_job)
+		calculate_job_values(simulation_state, target_job)
 
-			return true
-		}
+		return true
 	}
+
 	return false
 }
 
-@(private = "file")
 calculate_job_values :: proc(simulation_state: ^SimulationState, job: ^types.Job) {
 	final_income := job.base_income
 	final_illegitimate_income := job.base_illegitimate_income
 
-	details, is_buyin := &job.details.(types.BuyinJob)
+	final_failure_chance := job.base_failure_chance
 
-	if !is_buyin do return
-
-	final_failure_chance := details.base_failure_chance
-
-	for slot in details.crew_member_slots {
+	for slot in job.crew_member_slots {
 		if slot.assigned_crew_member == 0 do continue
 
 		crew_member := get_crew_member_by_id(simulation_state, slot.assigned_crew_member)
@@ -487,7 +471,7 @@ calculate_job_values :: proc(simulation_state: ^SimulationState, job: ^types.Job
 
 	job.cached_income = final_income
 	job.cached_illegitimate_income = final_illegitimate_income
-	details.cached_failure_chance = final_failure_chance
+	job.cached_failure_chance = final_failure_chance
 }
 
 @(private = "file")
@@ -495,13 +479,13 @@ clear_crew :: proc(simulation_state: ^SimulationState, job_id: types.JobID, slot
 	target_job := get_job_by_id(simulation_state, job_id)
 	if target_job == nil do return
 
-	if details, ok := &target_job.details.(types.BuyinJob); ok {
-		assigned_id := details.crew_member_slots[slot_idx].assigned_crew_member
+	if slot_idx < len(target_job.crew_member_slots) {
+		assigned_id := target_job.crew_member_slots[slot_idx].assigned_crew_member
 		crew_member := get_crew_member_by_id(simulation_state, assigned_id)
 		if crew_member == nil do return
 
-		if slot_idx < len(details.crew_member_slots) {
-			details.crew_member_slots[slot_idx].assigned_crew_member = 0
+		if slot_idx < len(target_job.crew_member_slots) {
+			target_job.crew_member_slots[slot_idx].assigned_crew_member = 0
 			crew_member.assigned_to_job_id = 0
 
 			jobs.activate(&crew_member.default_job)

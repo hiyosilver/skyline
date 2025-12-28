@@ -96,6 +96,7 @@ make_building_info_panel :: proc() -> BuildingInfoPanel {
 			6,
 			6,
 			6,
+			rl.Color{64, 48, 92, 255},
 			ui.make_margin(
 				16,
 				16,
@@ -112,7 +113,7 @@ make_building_info_panel :: proc() -> BuildingInfoPanel {
 						.Horizontal,
 						.Start,
 						.Center,
-						2,
+						4,
 						widget.laundering_check_box,
 						widget.laundering_label,
 					),
@@ -149,8 +150,8 @@ update_building_info_panel :: proc(
 
 	should_disable_purchase_button := !can_afford_purchase
 	should_disable_alt_purchase_button := !can_afford_alt_purchase
-	ui.button_set_disabled(widget.purchase_button, should_disable_purchase_button)
-	ui.button_set_disabled(widget.alt_purchase_button, should_disable_alt_purchase_button)
+	ui.simple_button_set_disabled(widget.purchase_button, should_disable_purchase_button)
+	ui.simple_button_set_disabled(widget.alt_purchase_button, should_disable_alt_purchase_button)
 
 	if should_disable_purchase_button {
 		ui.label_set_color(widget.purchase_button.variant.(ui.SimpleButton).child, rl.GRAY)
@@ -201,15 +202,16 @@ update_building_info_panel :: proc(
 
 	if building.owned {
 		widget.purchase_button_box.state = .Inactive
-		ui.button_reset_state(widget.purchase_button)
-		ui.button_reset_state(widget.alt_purchase_button)
+		ui.simple_button_reset_state(widget.purchase_button)
+		ui.simple_button_reset_state(widget.alt_purchase_button)
 		widget.owned_label.state = .Active
 		widget.laundering_check_box.state = .Active
 	} else {
 		widget.purchase_button_box.state = .Active
 		widget.owned_label.state = .Hidden
+		widget.laundering_check_box.state = .Inactive
 
-		ui.button_set_label_text(
+		ui.simple_button_set_label_text(
 			widget.purchase_button,
 			fmt.tprintf("$%s", global.format_float_thousands(building.purchase_price.money, 2)),
 		)
@@ -281,10 +283,10 @@ update_building_info_panel :: proc(
 		}
 
 		if money >= cost {
-			ui.button_set_disabled(row.button, false)
+			ui.simple_button_set_disabled(row.button, false)
 			ui.label_set_color(row.label, rl.WHITE)
 		} else {
-			ui.button_set_disabled(row.button, true)
+			ui.simple_button_set_disabled(row.button, true)
 			ui.label_set_color(row.label, rl.GRAY)
 		}
 	}

@@ -7,56 +7,44 @@ create_job :: proc(
 	name: string,
 	level, ticks_needed: int,
 	income, illegitimate_income: f64,
-	is_buyin_job: bool = false,
+	buyin_price: f64 = 0.0,
+	illegitimate_buyin_price: f64 = 0.0,
+	failure_chance: f32 = 0.0,
 ) -> types.Job {
 	@(static) id: types.JobID = 1
 	defer id += 1
 
-	if is_buyin_job {
-		crew_member_slots := make([dynamic]types.CrewMemberSlot)
+	crew_member_slots := make([dynamic]types.CrewMemberSlot)
 
-		append(&crew_member_slots, types.CrewMemberSlot{.Brawn, 0})
-		append(&crew_member_slots, types.CrewMemberSlot{.Savvy, 0})
-		append(&crew_member_slots, types.CrewMemberSlot{.Tech, 0})
-		append(&crew_member_slots, types.CrewMemberSlot{.Charisma, 0})
-
-		return types.Job {
-			id = id,
-			name = name,
-			level = level,
-			ticks_needed = ticks_needed,
-			base_income = income,
-			cached_income = income,
-			base_illegitimate_income = illegitimate_income,
-			cached_illegitimate_income = illegitimate_income,
-			details = types.BuyinJob {
-				buyin_price = 10.0,
-				illegitimate_buyin_price = 10.0,
-				base_failure_chance = 0.02,
-				crew_member_slots = crew_member_slots,
-			},
-		}
-	} else {
-		return types.Job {
-			id = id,
-			name = name,
-			level = level,
-			ticks_needed = ticks_needed,
-			base_income = income,
-			cached_income = income,
-			base_illegitimate_income = illegitimate_income,
-			cached_illegitimate_income = illegitimate_income,
-			details = types.StandardJob{},
-		}
+	return types.Job {
+		id = id,
+		name = name,
+		level = level,
+		ticks_needed = ticks_needed,
+		base_income = income,
+		cached_income = income,
+		base_illegitimate_income = illegitimate_income,
+		cached_illegitimate_income = illegitimate_income,
+		buyin_price = buyin_price,
+		illegitimate_buyin_price = illegitimate_buyin_price,
+		base_failure_chance = failure_chance,
+		crew_member_slots = crew_member_slots,
 	}
+}
+
+add_crew_slot :: proc(job: ^types.Job, type: types.CrewMemberSlotType, optional: bool) {
+	append(
+		&job.crew_member_slots,
+		types.CrewMemberSlot{type = type, optional = optional, assigned_crew_member = 0},
+	)
 }
 
 tick :: proc(job: ^types.Job) -> types.JobResult {
 	if !job.is_active do return .Inactive
 
-	#partial switch &d in job.details {
-	case types.BuyinJob:
-		if job.ticks_current < job.ticks_needed - 1 && rand.float32() <= d.cached_failure_chance {
+	if job.cached_failure_chance > 0.0 {
+		if job.ticks_current < job.ticks_needed - 1 &&
+		   rand.float32() <= job.cached_failure_chance {
 			return .Failed
 		}
 	}
@@ -66,6 +54,7 @@ tick :: proc(job: ^types.Job) -> types.JobResult {
 		job.ticks_current -= job.ticks_needed
 		return .Finished
 	}
+
 	return .Active
 }
 

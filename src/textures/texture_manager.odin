@@ -16,7 +16,8 @@ UiTextureId :: enum {
 	Box,
 	Tick,
 	Panel,
-	PanelRed,
+	CrewSlot,
+	CrewSlotOptional,
 }
 
 IconTextureId :: enum {
@@ -71,8 +72,10 @@ load_textures :: proc(asset_dir: string) {
 			texture_file_path = fmt.caprintf("%s/images/ui/tick.png", asset_dir)
 		case .Panel:
 			texture_file_path = fmt.caprintf("%s/images/ui/panel.png", asset_dir)
-		case .PanelRed:
-			texture_file_path = fmt.caprintf("%s/images/ui/panel_red.png", asset_dir)
+		case .CrewSlot:
+			texture_file_path = fmt.caprintf("%s/images/ui/crew_slot.png", asset_dir)
+		case .CrewSlotOptional:
+			texture_file_path = fmt.caprintf("%s/images/ui/crew_slot_optional.png", asset_dir)
 		}
 		tex := rl.LoadTexture(texture_file_path)
 		rl.GenTextureMipmaps(&tex)

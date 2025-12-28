@@ -26,10 +26,9 @@ make_crew_member_card :: proc(cm: ^types.CrewMember) -> CrewMemberCard {
 	widget: CrewMemberCard = {}
 
 	base_color: rl.Color
-	#partial switch details in cm.default_job.details {
-	case types.BuyinJob:
+	if cm.default_job.cached_failure_chance > 0.0 {
 		base_color = rl.Color{192, 92, 92, 255}
-	case:
+	} else {
 		base_color = rl.GRAY
 	}
 
@@ -77,6 +76,7 @@ make_crew_member_card :: proc(cm: ^types.CrewMember) -> CrewMemberCard {
 		6,
 		6,
 		6,
+		rl.Color{64, 48, 92, 255},
 		ui.make_margin(
 			16,
 			16,
@@ -175,7 +175,7 @@ make_crew_member_card :: proc(cm: ^types.CrewMember) -> CrewMemberCard {
 		0.0,
 	)
 
-	ui.button_set_disabled(widget.root, true)
+	ui.simple_button_set_disabled(widget.root, true)
 
 	return widget
 }
@@ -254,17 +254,16 @@ update_crew_member_card :: proc(
 		)
 	}
 
-	#partial switch details in job.details {
-	case types.BuyinJob:
+	if job.cached_failure_chance > 0.0 {
 		ui.label_set_text(
 			widget.ticks_label,
 			fmt.tprintf(
 				"%d ticks (Fail: %s%%)",
 				job.ticks_needed,
-				global.format_float_thousands(f64(details.cached_failure_chance * 100.0), 1),
+				global.format_float_thousands(f64(job.cached_failure_chance * 100.0), 1),
 			),
 		)
-	case:
+	} else {
 		ui.label_set_text(widget.ticks_label, fmt.tprintf("%d ticks", job.ticks_needed))
 	}
 
@@ -290,11 +289,11 @@ update_crew_member_card :: proc(
 	is_assigned_to_job := job_ptr != nil
 
 	if selectable && !is_assigned_to_job {
-		ui.button_set_disabled(widget.root, false)
-		ui.button_set_color(widget.root, rl.GREEN)
+		ui.simple_button_set_disabled(widget.root, false)
+		ui.simple_button_set_color(widget.root, rl.GREEN)
 	} else {
-		ui.button_set_disabled(widget.root, true)
-		ui.button_set_color(widget.root, rl.Color{255, 255, 255, 0})
+		ui.simple_button_set_disabled(widget.root, true)
+		ui.simple_button_set_color(widget.root, rl.Color{255, 255, 255, 0})
 	}
 
 	if is_assigned_to_job {

@@ -75,6 +75,7 @@ texture_panel_set_tint_color :: proc(component: ^Component, tint_color: rl.Color
 NPatchTexturePanel :: struct {
 	child:                    ^Component,
 	texture:                  rl.Texture2D,
+	tint_color:               rl.Color,
 	left, top, right, bottom: i32,
 }
 
@@ -82,6 +83,7 @@ make_n_patch_texture_panel :: proc(
 	texture: rl.Texture2D,
 	min_size: rl.Vector2,
 	left, top, right, bottom: i32,
+	tint_color: rl.Color = rl.WHITE,
 	child: ^Component = nil,
 ) -> ^Component {
 	c := new(Component)
@@ -90,12 +92,13 @@ make_n_patch_texture_panel :: proc(
 	c.min_size = min_size
 
 	c.variant = NPatchTexturePanel {
-		texture = texture,
-		child   = child,
-		left    = left,
-		top     = top,
-		right   = right,
-		bottom  = bottom,
+		texture    = texture,
+		tint_color = tint_color,
+		child      = child,
+		left       = left,
+		top        = top,
+		right      = right,
+		bottom     = bottom,
 	}
 
 	return c
@@ -106,6 +109,14 @@ n_patch_texture_panel_set_texture :: proc(component: ^Component, texture: rl.Tex
 
 	if n_patch_texture_panel, ok := &component.variant.(NPatchTexturePanel); ok {
 		n_patch_texture_panel.texture = texture
+	}
+}
+
+n_patch_texture_panel_set_tint_color :: proc(component: ^Component, tint_color: rl.Color) {
+	if component == nil do return
+
+	if texture_panel, ok := &component.variant.(NPatchTexturePanel); ok {
+		texture_panel.tint_color = tint_color
 	}
 }
 

@@ -298,6 +298,7 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 			6,
 			6,
 			6,
+			rl.Color{64, 48, 92, 255},
 			ui.make_margin(
 				16,
 				16,

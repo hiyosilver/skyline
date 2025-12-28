@@ -50,7 +50,6 @@ generate_crew_member :: proc() -> types.CrewMember {
 			ticks_needed = 4,
 			base_illegitimate_income = 2.0,
 			cached_illegitimate_income = 2.0,
-			details = types.StandardJob{},
 		},
 		brawn = 1,
 		savvy = 1,

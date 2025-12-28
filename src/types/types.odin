@@ -26,30 +26,30 @@ JobResult :: enum {
 }
 
 Job :: struct {
+	// Identity
 	id:                          JobID,
 	name:                        string,
+	description:                 string,
 	level:                       int,
+
+	// State
 	is_ready, is_active:         bool,
 	ticks_needed, ticks_current: int,
+
+	// Output
 	base_income:                 f64,
 	base_illegitimate_income:    f64,
 	cached_income:               f64,
 	cached_illegitimate_income:  f64,
-	details:                     union {
-		StandardJob,
-		BuyinJob,
-	},
-}
 
-StandardJob :: struct {
-}
+	// Input
+	buyin_price:                 f64,
+	illegitimate_buyin_price:    f64,
+	crew_member_slots:           [dynamic]CrewMemberSlot,
 
-BuyinJob :: struct {
-	buyin_price:              f64,
-	illegitimate_buyin_price: f64,
-	base_failure_chance:      f32,
-	cached_failure_chance:    f32,
-	crew_member_slots:        [dynamic]CrewMemberSlot,
+	// Risk
+	base_failure_chance:         f32,
+	cached_failure_chance:       f32,
 }
 
 CrewMemberSlotType :: enum {
@@ -61,6 +61,7 @@ CrewMemberSlotType :: enum {
 
 CrewMemberSlot :: struct {
 	type:                 CrewMemberSlotType,
+	optional:             bool,
 	assigned_crew_member: CrewMemberID,
 }
 

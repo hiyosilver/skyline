@@ -28,6 +28,7 @@ ComponentVariant :: union {
 	TexturePanel,
 	Pill,
 	SimpleButton,
+	NPatchButton,
 	RadioButton,
 	CheckBox,
 	Label,
@@ -130,6 +131,14 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 			max(component.min_size.y, desired_size.y),
 		}
 	case SimpleButton:
+		child_desired_size := get_desired_size(v.child)
+		desired_size.x = child_desired_size.x + (v.padding * 2)
+		desired_size.y = child_desired_size.y + (v.padding * 2)
+		desired_size = {
+			max(component.min_size.x, desired_size.x),
+			max(component.min_size.y, desired_size.y),
+		}
+	case NPatchButton:
 		child_desired_size := get_desired_size(v.child)
 		desired_size.x = child_desired_size.x + (v.padding * 2)
 		desired_size.y = child_desired_size.y + (v.padding * 2)
@@ -408,6 +417,24 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 			arrange_components(v.child, child_rect)
 		}
 
+	case NPatchButton:
+		if v.child != nil {
+			padding_x := v.padding * 2
+			padding_y := v.padding * 2
+
+			safe_width := max(0.0, actual_rect.width - padding_x)
+			safe_height := max(0.0, actual_rect.height - padding_y)
+
+			child_rect := rl.Rectangle {
+				x      = actual_rect.x + v.padding,
+				y      = actual_rect.y + v.padding,
+				width  = safe_width,
+				height = safe_height,
+			}
+
+			arrange_components(v.child, child_rect)
+		}
+
 	case Graph:
 		if v.child != nil {
 			arrange_components(v.child, actual_rect)
@@ -542,6 +569,31 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 		}
 
 	case SimpleButton:
+		is_hovered := rl.CheckCollisionPointRec(mouse_pos, rect)
+		mouse_button_pressed := input.is_mouse_button_held_down(.LEFT, input_data)
+		mouse_button_just_pressed := input.is_mouse_button_pressed_this_frame(.LEFT, input_data)
+
+		captured = is_hovered
+
+		if v.state != .Disabled {
+			if is_hovered {
+				if mouse_button_just_pressed {
+					v.state = .Pressed
+				} else if !mouse_button_pressed && v.state == .Pressed {
+					v.state = .Released
+				} else if !mouse_button_pressed {
+					v.state = .Hovered
+				}
+			} else {
+				v.state = .Idle
+			}
+		}
+
+		if v.child != nil {
+			if handle_input_recursive(v.child, input_data) do captured = true
+		}
+
+	case NPatchButton:
 		is_hovered := rl.CheckCollisionPointRec(mouse_pos, rect)
 		mouse_button_pressed := input.is_mouse_button_held_down(.LEFT, input_data)
 		mouse_button_just_pressed := input.is_mouse_button_pressed_this_frame(.LEFT, input_data)
@@ -827,7 +879,7 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 			{component.position.x, component.position.y, component.size.x, component.size.y},
 			{0, 0},
 			0.0,
-			rl.WHITE,
+			v.tint_color,
 		)
 		draw_components_recursive(v.child, debug)
 	case Pill:
@@ -869,6 +921,43 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 				rl.ColorBrightness(bg_color, -0.3),
 			)
 		}
+
+		draw_components_recursive(v.child, debug)
+	case NPatchButton:
+		tint_color: rl.Color
+		switch v.state {
+		case .Idle:
+			tint_color = v.tint_color_default
+		case .Hovered:
+			tint_color = v.tint_color_hovered
+		case .Pressed:
+			tint_color = v.tint_color_pressed
+		case .Released:
+			tint_color = v.tint_color_hovered
+		case .Disabled:
+			tint_color = v.tint_color_disabled
+		}
+
+		texture := v.texture
+		source_rectangle := rl.Rectangle{0, 0, f32(texture.width), f32(texture.height)}
+
+		n_patch_info := rl.NPatchInfo {
+			source_rectangle,
+			v.left,
+			v.top,
+			v.right,
+			v.bottom,
+			.NINE_PATCH,
+		}
+
+		rl.DrawTextureNPatch(
+			texture,
+			n_patch_info,
+			{component.position.x, component.position.y, component.size.x, component.size.y},
+			{0, 0},
+			0.0,
+			tint_color,
+		)
 
 		draw_components_recursive(v.child, debug)
 	case RadioButton:
@@ -1112,6 +1201,8 @@ destroy_components_recursive :: proc(component: ^Component) {
 	case Pill:
 		destroy_components_recursive(v.child)
 	case SimpleButton:
+		destroy_components_recursive(v.child)
+	case NPatchButton:
 		destroy_components_recursive(v.child)
 	case RadioButton:
 		delete(v.connected_radio_buttons)

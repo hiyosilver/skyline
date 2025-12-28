@@ -2,7 +2,7 @@ package ui
 
 import rl "vendor:raylib"
 
-SimpleButtonState :: enum {
+ButtonState :: enum {
 	Idle,
 	Disabled,
 	Hovered,
@@ -10,21 +10,21 @@ SimpleButtonState :: enum {
 	Released,
 }
 
-SimpleButtonClickType :: enum {
+ButtonClickType :: enum {
 	OnPress,
 	OnRelease,
 }
 
 SimpleButton :: struct {
 	child:                                                       ^Component,
-	state:                                                       SimpleButtonState,
-	click_type:                                                  SimpleButtonClickType,
+	state:                                                       ButtonState,
+	click_type:                                                  ButtonClickType,
 	color_default, color_hovered, color_pressed, color_disabled: rl.Color,
 	padding:                                                     f32,
 }
 
 make_simple_button :: proc(
-	click_type: SimpleButtonClickType,
+	click_type: ButtonClickType,
 	color, color_disabled: rl.Color,
 	min_size: rl.Vector2,
 	child: ^Component = nil,
@@ -48,7 +48,7 @@ make_simple_button :: proc(
 	return c
 }
 
-button_was_clicked :: proc(component: ^Component) -> bool {
+simple_button_was_clicked :: proc(component: ^Component) -> bool {
 	if component == nil || component.state == .Inactive do return false
 	if btn, ok := component.variant.(SimpleButton); ok {
 		return btn.state == .Released
@@ -56,7 +56,7 @@ button_was_clicked :: proc(component: ^Component) -> bool {
 	return false
 }
 
-button_set_disabled :: proc(component: ^Component, disabled: bool) {
+simple_button_set_disabled :: proc(component: ^Component, disabled: bool) {
 	if component == nil do return
 	if btn, ok := &component.variant.(SimpleButton); ok {
 		if disabled {
@@ -69,7 +69,7 @@ button_set_disabled :: proc(component: ^Component, disabled: bool) {
 	}
 }
 
-button_set_color :: proc(component: ^Component, color: rl.Color) {
+simple_button_set_color :: proc(component: ^Component, color: rl.Color) {
 	if component == nil do return
 
 	if btn, ok := &component.variant.(SimpleButton); ok {
@@ -81,7 +81,7 @@ button_set_color :: proc(component: ^Component, color: rl.Color) {
 	}
 }
 
-button_reset_state :: proc(component: ^Component) {
+simple_button_reset_state :: proc(component: ^Component) {
 	if component == nil do return
 
 	if btn, ok := &component.variant.(SimpleButton); ok {
@@ -89,7 +89,7 @@ button_reset_state :: proc(component: ^Component) {
 	}
 }
 
-button_set_label_text :: proc(component: ^Component, text: string) {
+simple_button_set_label_text :: proc(component: ^Component, text: string) {
 	if component == nil do return
 
 	if btn, ok := &component.variant.(SimpleButton); ok {
@@ -97,9 +97,116 @@ button_set_label_text :: proc(component: ^Component, text: string) {
 	}
 }
 
+simple_button_set_label_color :: proc(component: ^Component, color: rl.Color) {
+	if component == nil do return
+
+	if btn, ok := &component.variant.(SimpleButton); ok {
+		label_set_color(btn.child, color)
+	}
+}
+
+NPatchButton :: struct {
+	child:                                                                           ^Component,
+	state:                                                                           ButtonState,
+	click_type:                                                                      ButtonClickType,
+	texture:                                                                         rl.Texture2D,
+	tint_color_default, tint_color_hovered, tint_color_pressed, tint_color_disabled: rl.Color,
+	left, top, right, bottom:                                                        i32,
+	padding:                                                                         f32,
+}
+
+make_n_patch_button :: proc(
+	click_type: ButtonClickType,
+	texture: rl.Texture2D,
+	tint_color, tint_color_disabled: rl.Color,
+	left, top, right, bottom: i32,
+	min_size: rl.Vector2,
+	child: ^Component = nil,
+	padding: f32 = 4.0,
+) -> ^Component {
+	c := new(Component)
+
+	c.min_size = min_size
+
+	c.variant = NPatchButton {
+		state               = .Idle,
+		click_type          = click_type,
+		texture             = texture,
+		tint_color_default  = tint_color,
+		tint_color_hovered  = rl.ColorBrightness(tint_color, 0.2),
+		tint_color_pressed  = rl.ColorBrightness(tint_color, -0.2),
+		tint_color_disabled = tint_color_disabled,
+		left                = left,
+		top                 = top,
+		right               = right,
+		bottom              = bottom,
+		padding             = padding,
+		child               = child,
+	}
+
+	return c
+}
+
+n_patch_button_was_clicked :: proc(component: ^Component) -> bool {
+	if component == nil || component.state == .Inactive do return false
+	if btn, ok := component.variant.(NPatchButton); ok {
+		return btn.state == .Released
+	}
+	return false
+}
+
+n_patch_button_set_disabled :: proc(component: ^Component, disabled: bool) {
+	if component == nil do return
+	if btn, ok := &component.variant.(NPatchButton); ok {
+		if disabled {
+			btn.state = .Disabled
+		} else {
+			if btn.state == .Disabled {
+				btn.state = .Idle
+			}
+		}
+	}
+}
+
+n_patch_button_set_tint_color :: proc(component: ^Component, tint_color: rl.Color) {
+	if component == nil do return
+
+	if btn, ok := &component.variant.(NPatchButton); ok {
+		if btn.tint_color_default == tint_color do return
+
+		btn.tint_color_default = tint_color
+		btn.tint_color_hovered = rl.ColorBrightness(tint_color, 0.2)
+		btn.tint_color_pressed = rl.ColorBrightness(tint_color, -0.2)
+	}
+}
+
+n_patch_button_reset_state :: proc(component: ^Component) {
+	if component == nil do return
+
+	if btn, ok := &component.variant.(NPatchButton); ok {
+		btn.state = .Idle
+	}
+}
+
+n_patch_button_set_label_text :: proc(component: ^Component, text: string) {
+	if component == nil do return
+
+	if btn, ok := &component.variant.(NPatchButton); ok {
+		label_set_text(btn.child, text)
+	}
+}
+
+n_patch_button_set_label_color :: proc(component: ^Component, color: rl.Color) {
+	if component == nil do return
+
+	if btn, ok := &component.variant.(NPatchButton); ok {
+		label_set_color(btn.child, color)
+	}
+}
+
 RadioButton :: struct {
 	selected:                bool,
-	state:                   SimpleButtonState,
+	state:                   ButtonState,
 	connected_radio_buttons: [dynamic]^Component,
 }
 
@@ -158,7 +265,7 @@ radio_button_was_activated :: proc(component: ^Component) -> bool {
 
 CheckBox :: struct {
 	selected: bool,
-	state:    SimpleButtonState,
+	state:    ButtonState,
 }
 
 make_check_box :: proc(min_size: rl.Vector2 = {18.0, 18.0}, selected: bool = false) -> ^Component {

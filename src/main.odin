@@ -111,6 +111,15 @@ main :: proc() {
 	}
 	*/
 
+	/*
+	base := 13162.58
+	mult := 1.148698355
+
+	base *= mult * mult * mult * mult * mult
+
+	fmt.printfln("%f", base)
+	*/
+
 	exe_path = os.args[0]
 	exe_dir = filepath.dir(exe_path)
 	defer delete(exe_dir)
@@ -348,20 +357,37 @@ init_game_ui_layout :: proc() {
 	)
 }
 
-setup_debug_scenario :: proc(simulation: ^simulation.SimulationState, game_state: ^GameState) {
+setup_debug_scenario :: proc(
+	simulation_state: ^simulation.SimulationState,
+	game_state: ^GameState,
+) {
 	buildings.generate_buildings(&simulation_state.buildings_list)
 
-	jobA := jobs.create_job("Construction", 2, 6, 2.5, 1.5)
+	jobA := jobs.create_job("Construction Day Labor", 1, 10, 50.0, 0.0)
+	simulation.calculate_job_values(simulation_state, &jobA)
 	append(&simulation_state.job_entries, jobA)
 
-	jobB := jobs.create_job("Waiting", 1, 5, 3.0, 0.0)
+	jobB := jobs.create_job("Move Product", 2, 20, 0.0, 250.0, 0.0, 100.0, 0.05)
+	jobs.add_crew_slot(&jobB, .Brawn, true)
+	simulation.calculate_job_values(simulation_state, &jobB)
 	append(&simulation_state.job_entries, jobB)
 
-	jobC := jobs.create_job("Fast food", 1, 3, 1.5, 0.0)
+	jobC := jobs.create_job("ATM Skimming", 3, 40, 0.0, 600.0, 0.0, 50.0, 0.05)
+	jobs.add_crew_slot(&jobC, .Tech, false)
+	simulation.calculate_job_values(simulation_state, &jobC)
 	append(&simulation_state.job_entries, jobC)
 
-	jobD := jobs.create_job("Collect debt", 5, 10, 0.0, 145.0, true)
+	jobD := jobs.create_job("Shakedown Local Business", 5, 60, 0.0, 500.0, 0.0, 0.0, 0.025)
+	jobs.add_crew_slot(&jobD, .Brawn, false)
+	jobs.add_crew_slot(&jobD, .Brawn, true)
+	simulation.calculate_job_values(simulation_state, &jobD)
 	append(&simulation_state.job_entries, jobD)
+
+	jobE := jobs.create_job("Rigged Poker Game", 6, 120, 8000.0, 0.0, 1500.0, 0.0, 0.02)
+	jobs.add_crew_slot(&jobE, .Charisma, false)
+	jobs.add_crew_slot(&jobE, .Tech, true)
+	simulation.calculate_job_values(simulation_state, &jobE)
+	append(&simulation_state.job_entries, jobE)
 
 	crew_memberA := crew.generate_crew_member()
 	append(&simulation_state.crew_roster, crew_memberA)
@@ -553,28 +579,28 @@ update_graph :: proc() {
 handle_stock_window_interactions :: proc() {
 	if box, ok := &game_state.ui.stock_window.stock_list_box.variant.(ui.BoxContainer); ok {
 		for child, i in box.children {
-			if ui.button_was_clicked(child) {
+			if ui.simple_button_was_clicked(child) {
 				selected_id := game_state.ui.stock_window.company_list[i]
 				game_state.ui.stock_window.selected_id = selected_id
 			}
 		}
 	}
 
-	if ui.button_was_clicked(game_state.ui.stock_window.buy_button) {
+	if ui.simple_button_was_clicked(game_state.ui.stock_window.buy_button) {
 		simulation.queue_action(
 			&simulation_state,
 			types.ActionBuyStock{game_state.ui.stock_window.selected_id, 1},
 		)
 	}
 
-	if ui.button_was_clicked(game_state.ui.stock_window.sell_button) {
+	if ui.simple_button_was_clicked(game_state.ui.stock_window.sell_button) {
 		simulation.queue_action(
 			&simulation_state,
 			types.ActionSellStock{game_state.ui.stock_window.selected_id, 1},
 		)
 	}
 
-	if ui.button_was_clicked(game_state.ui.stock_window.buy_all_button) {
+	if ui.simple_button_was_clicked(game_state.ui.stock_window.buy_all_button) {
 		number_to_buy := int(
 			simulation_state.money /
 			simulation_state.market.companies[game_state.ui.stock_window.selected_id].current_price,
@@ -585,7 +611,7 @@ handle_stock_window_interactions :: proc() {
 		)
 	}
 
-	if ui.button_was_clicked(game_state.ui.stock_window.sell_all_button) {
+	if ui.simple_button_was_clicked(game_state.ui.stock_window.sell_all_button) {
 		stock_info := &simulation_state.stock_portfolio.stocks[game_state.ui.stock_window.selected_id]
 
 		simulation.queue_action(
@@ -605,17 +631,14 @@ handle_job_card_interactions :: proc() {
 		job := &simulation_state.job_entries[i]
 		display := &game_state.job_view_models[i]
 
-		if ui.button_was_clicked(display.start_button) {
+		if ui.simple_button_was_clicked(display.start_button) {
 			simulation.queue_action(&simulation_state, types.ActionToggleJob{i})
 		}
 
-		details, is_buyin := &job.details.(types.BuyinJob)
-		if !is_buyin do continue
-
 		for slot_display, j in display.crew_slots {
-			if !ui.button_was_clicked(slot_display.root_button) do continue
+			if !ui.n_patch_button_was_clicked(slot_display.root_button) do continue
 
-			if details.crew_member_slots[j].assigned_crew_member != 0 {
+			if job.crew_member_slots[j].assigned_crew_member != 0 {
 				simulation.queue_action(&simulation_state, types.ActionClearCrew{job.id, j})
 			} else {
 				game_state.selection_state = AssignCrewMemberSelectionState {
@@ -635,7 +658,7 @@ handle_crew_member_card_interactions :: proc() {
 		if i >= len(game_state.crew_view_models) do break
 		display := &game_state.crew_view_models[i]
 
-		if ui.button_was_clicked(display.root) {
+		if ui.simple_button_was_clicked(display.root) {
 			if is_crew_selection_mode {
 				simulation.queue_action(
 					&simulation_state,
@@ -656,14 +679,14 @@ handle_building_info_panel_interactions :: proc() {
 	for &building in simulation_state.buildings_list {
 		if !building.selected do continue
 
-		if ui.button_was_clicked(game_state.ui.building_info_panel.purchase_button) {
+		if ui.simple_button_was_clicked(game_state.ui.building_info_panel.purchase_button) {
 			simulation.queue_action(
 				&simulation_state,
 				types.ActionPurchaseBuilding{building_id = building.id},
 			)
 		}
 
-		if ui.button_was_clicked(game_state.ui.building_info_panel.alt_purchase_button) {
+		if ui.simple_button_was_clicked(game_state.ui.building_info_panel.alt_purchase_button) {
 			simulation.queue_action(
 				&simulation_state,
 				types.ActionPurchaseBuildingAltPrice{building_id = building.id},
@@ -678,7 +701,7 @@ handle_building_info_panel_interactions :: proc() {
 		}
 
 		for row in game_state.ui.building_info_panel.upgrade_rows {
-			if ui.button_was_clicked(row.button) {
+			if ui.simple_button_was_clicked(row.button) {
 				simulation.queue_action(
 					&simulation_state,
 					types.ActionBuyUpgrade{building_id = building.id, upgrade_id = row.upgrade_id},
