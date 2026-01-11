@@ -312,7 +312,7 @@ make_stock_window :: proc(market: ^stocks.Market) -> StockWindow {
 					ui.make_label("Stock Market", global.font_large, 28, rl.WHITE),
 					ui.make_scroll_container(
 						{600.0, global.WINDOW_HEIGHT * 0.5},
-						widget.stock_list_box,
+						child = widget.stock_list_box,
 					),
 					widget.detail_root,
 				),

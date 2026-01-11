@@ -215,11 +215,49 @@ init_game_ui_layout :: proc() {
 
 	job_scroll_container := ui.make_scroll_container(
 		{0.0, global.WINDOW_HEIGHT * 0.5},
-		game_state.ui.jobs_box,
-		scroll_bar_position = .Left,
+		.Left,
+		child = game_state.ui.jobs_box,
 	)
 
-	job_panel := ui.make_anchor(.BottomLeft, ui.make_margin(16, 16, 16, 16, job_scroll_container))
+	TEST_BOX := ui.make_box(
+		.Vertical,
+		.Fill,
+		.Fill,
+		4,
+		ui.make_simple_button(
+			.OnRelease,
+			rl.GREEN,
+			rl.DARKGREEN,
+			{200.0, 75.0},
+			ui.make_label("Button A", global.font_large, 28, rl.BLACK, .Left),
+		),
+		ui.make_simple_button(
+			.OnRelease,
+			rl.GREEN,
+			rl.DARKGREEN,
+			{200.0, 75.0},
+			ui.make_label("Button B", global.font_large, 28, rl.BLACK, .Left),
+		),
+		ui.make_simple_button(
+			.OnRelease,
+			rl.GREEN,
+			rl.DARKGREEN,
+			{200.0, 75.0},
+			ui.make_label("Button C", global.font_large, 28, rl.BLACK, .Left),
+		),
+	)
+
+	tab_panel := ui.make_tab_panel(
+		{0.0, global.WINDOW_HEIGHT * 0.5},
+		textures.ui_textures[.Panel],
+		32.0,
+		.Top,
+		0,
+		ui.TabPage{title = "Jobs", content = ui.make_margin(16, 16, 16, 16, job_scroll_container)},
+		ui.TabPage{title = "TEST", content = ui.make_margin(16, 16, 16, 16, TEST_BOX)},
+	)
+
+	job_panel := ui.make_anchor(.BottomLeft, ui.make_margin(16, 16, 16, 16, tab_panel))
 
 
 	game_state.ui.crew_members_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 8)
@@ -363,29 +401,82 @@ setup_debug_scenario :: proc(
 ) {
 	buildings.generate_buildings(&simulation_state.buildings_list)
 
-	jobA := jobs.create_job("Construction Day Labor", 1, 10, 50.0, 0.0)
+	jobA := jobs.create_job(
+		"Construction Day Labor",
+		"Honest work for dishonest times.",
+		1,
+		10,
+		50.0,
+		0.0,
+	)
 	simulation.calculate_job_values(simulation_state, &jobA)
 	append(&simulation_state.job_entries, jobA)
 
-	jobB := jobs.create_job("Move Product", 2, 20, 0.0, 250.0, 0.0, 100.0, 0.05)
-	jobs.add_crew_slot(&jobB, .Brawn, true)
+	jobB := jobs.create_job(
+		"Move Product",
+		"A contact needs a package moved crosstown.",
+		2,
+		20,
+		0.0,
+		250.0,
+		0.0,
+		100.0,
+		0.05,
+	)
+	effects := make([dynamic]types.CrewMemberSlotEffect)
+	append(&effects, types.CrewMemberSlotEffect{.FailureChangeReductionFlat, 0.005})
+	jobs.add_crew_slot(&jobB, .Brawn, effects, true)
 	simulation.calculate_job_values(simulation_state, &jobB)
 	append(&simulation_state.job_entries, jobB)
 
-	jobC := jobs.create_job("ATM Skimming", 3, 40, 0.0, 600.0, 0.0, 50.0, 0.05)
-	jobs.add_crew_slot(&jobC, .Tech, false)
+	jobC := jobs.create_job(
+		"ATM Skimming",
+		"Install a skimmer on a quiet ATM and harvest the card data.",
+		3,
+		40,
+		0.0,
+		600.0,
+		0.0,
+		50.0,
+		0.05,
+	)
+	jobs.add_crew_slot(&jobC, .Tech, nil, false)
 	simulation.calculate_job_values(simulation_state, &jobC)
 	append(&simulation_state.job_entries, jobC)
 
-	jobD := jobs.create_job("Shakedown Local Business", 5, 60, 0.0, 500.0, 0.0, 0.0, 0.025)
-	jobs.add_crew_slot(&jobD, .Brawn, false)
-	jobs.add_crew_slot(&jobD, .Brawn, true)
+	jobD := jobs.create_job(
+		"Shakedown Local Business",
+		"Would be a shame if you had an 'accident'.",
+		5,
+		60,
+		0.0,
+		500.0,
+		0.0,
+		0.0,
+		0.025,
+	)
+	jobs.add_crew_slot(&jobD, .Brawn, nil, false)
+	effects = make([dynamic]types.CrewMemberSlotEffect)
+	append(&effects, types.CrewMemberSlotEffect{.IllegitimateIncomeIncreasePercent, 0.5})
+	jobs.add_crew_slot(&jobD, .Brawn, effects, true)
 	simulation.calculate_job_values(simulation_state, &jobD)
 	append(&simulation_state.job_entries, jobD)
 
-	jobE := jobs.create_job("Rigged Poker Game", 6, 120, 8000.0, 0.0, 1500.0, 0.0, 0.02)
-	jobs.add_crew_slot(&jobE, .Charisma, false)
-	jobs.add_crew_slot(&jobE, .Tech, true)
+	jobE := jobs.create_job(
+		"Rigged Poker Game",
+		"Host an exclusive buy-in game, mark the cards, and bleed them dry.",
+		6,
+		120,
+		8000.0,
+		0.0,
+		1500.0,
+		0.0,
+		0.02,
+	)
+	jobs.add_crew_slot(&jobE, .Charisma, nil, false)
+	effects = make([dynamic]types.CrewMemberSlotEffect)
+	append(&effects, types.CrewMemberSlotEffect{.FailureChangeReductionFlat, 0.002})
+	jobs.add_crew_slot(&jobE, .Tech, effects, true)
 	simulation.calculate_job_values(simulation_state, &jobE)
 	append(&simulation_state.job_entries, jobE)
 

@@ -85,6 +85,9 @@ cleanup :: proc(state: ^SimulationState) {
 	delete(state.buildings_list)
 
 	for &job in state.job_entries {
+		for &slot in job.crew_member_slots {
+			delete(slot.effects)
+		}
 		delete(job.crew_member_slots)
 	}
 	delete(state.job_entries)
@@ -457,16 +460,30 @@ calculate_job_values :: proc(simulation_state: ^SimulationState, job: ^types.Job
 
 		crew_member := get_crew_member_by_id(simulation_state, slot.assigned_crew_member)
 
+		multiplier: i32
 		switch slot.type {
 		case .Brawn:
-			final_failure_chance -= f32(crew_member.brawn) * 0.005
+			multiplier = crew_member.brawn
 		case .Savvy:
-			final_income *= 1.0 + f64(crew_member.savvy) * 0.1
+			multiplier = crew_member.savvy
 		case .Tech:
-		//TODO: heat!
+			multiplier = crew_member.tech
 		case .Charisma:
-			final_illegitimate_income *= 1.0 + f64(crew_member.charisma) * 0.1
+			multiplier = crew_member.charisma
 		}
+
+		for effect in slot.effects {
+			switch effect.type {
+			case .IncomeIncreasePercent:
+				final_income *= 1.0 + f64(multiplier) * effect.amount
+			case .IllegitimateIncomeIncreasePercent:
+				final_illegitimate_income *= 1.0 + f64(multiplier) * effect.amount
+			case .FailureChangeReductionFlat:
+				final_failure_chance -= f32(multiplier) * f32(effect.amount)
+			}
+		}
+
+		//tech heat?!
 	}
 
 	job.cached_income = final_income

@@ -12,16 +12,17 @@ JobCard :: struct {
 	root:              ^ui.Component,
 	level_label:       ^ui.Component,
 	name_label:        ^ui.Component,
+	description_label: ^ui.Component,
 	income_label:      ^ui.Component,
 	ticks_label:       ^ui.Component,
 	buyin_price_label: ^ui.Component,
 	start_button:      ^ui.Component,
 	button_label:      ^ui.Component,
 	progress_box:      ^ui.Component,
-	crew_slots:        [dynamic]JobSlotDisplay,
+	crew_slots:        [dynamic]CrewSlotDisplay,
 }
 
-JobSlotDisplay :: struct {
+CrewSlotDisplay :: struct {
 	root_button:  ^ui.Component,
 	status_label: ^ui.Component,
 	icon_panel:   ^ui.Component,
@@ -65,6 +66,7 @@ make_job_card :: proc(job: ^types.Job) -> JobCard {
 
 	widget.level_label = ui.make_label("", global.font_small, 18.0, rl.RAYWHITE, .Left)
 	widget.name_label = ui.make_label("", global.font, 24.0, rl.RAYWHITE, .Left)
+	widget.description_label = ui.make_label("", global.font_small, 18.0, rl.RAYWHITE, .Left)
 	widget.income_label = ui.make_label("", global.font_small_italic, 18.0, rl.RAYWHITE, .Left)
 	widget.ticks_label = ui.make_label("", global.font_small_italic, 18.0, rl.RAYWHITE, .Left)
 
@@ -122,7 +124,7 @@ make_job_card :: proc(job: ^types.Job) -> JobCard {
 		)
 		append(
 			&widget.crew_slots,
-			JobSlotDisplay {
+			CrewSlotDisplay {
 				root_button = slot_button,
 				status_label = status_label,
 				icon_panel = icon_panel,
@@ -161,6 +163,7 @@ make_job_card :: proc(job: ^types.Job) -> JobCard {
 						4,
 						widget.level_label,
 						widget.name_label,
+						widget.description_label,
 						widget.income_label,
 					),
 					ui.make_box(
@@ -206,6 +209,7 @@ update_job_card :: proc(
 		),
 	)
 	ui.label_set_text(widget.name_label, job.name)
+	ui.label_set_text(widget.description_label, job.description)
 	if job.is_active {
 		ui.label_set_text(widget.name_label, fmt.tprintf("%s ▶", job.name))
 	} else if job.is_ready {
@@ -242,6 +246,9 @@ update_job_card :: proc(
 	if job.buyin_price > 0 && money < job.buyin_price ||
 	   job.illegitimate_buyin_price > 0 && illegitimate_money < job.illegitimate_buyin_price {
 		can_afford = false
+		ui.label_set_color(widget.buyin_price_label, rl.GRAY)
+	} else {
+		ui.label_set_color(widget.buyin_price_label, rl.BLACK)
 	}
 
 	has_crew := true

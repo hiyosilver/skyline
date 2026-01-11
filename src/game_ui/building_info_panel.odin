@@ -142,26 +142,24 @@ update_building_info_panel :: proc(
 	}
 
 	if alt_purchase_price, ok := building.alt_purchase_price.(types.PurchasePrice);
-	   ok &&
-	   money < alt_purchase_price.money &&
+	   ok && money < alt_purchase_price.money ||
 	   illegitimate_money < alt_purchase_price.illegitimate_money {
 		can_afford_alt_purchase = false
 	}
 
-	should_disable_purchase_button := !can_afford_purchase
-	should_disable_alt_purchase_button := !can_afford_alt_purchase
-	ui.simple_button_set_disabled(widget.purchase_button, should_disable_purchase_button)
-	ui.simple_button_set_disabled(widget.alt_purchase_button, should_disable_alt_purchase_button)
-
-	if should_disable_purchase_button {
+	if !can_afford_purchase {
+		ui.simple_button_set_disabled(widget.purchase_button, true)
 		ui.label_set_color(widget.purchase_button.variant.(ui.SimpleButton).child, rl.GRAY)
 	} else {
+		ui.simple_button_set_disabled(widget.purchase_button, false)
 		ui.label_set_color(widget.purchase_button.variant.(ui.SimpleButton).child, rl.RAYWHITE)
 	}
 
-	if should_disable_alt_purchase_button {
+	if !can_afford_alt_purchase {
+		ui.simple_button_set_disabled(widget.alt_purchase_button, true)
 		ui.label_set_color(widget.alt_purchase_button.variant.(ui.SimpleButton).child, rl.GRAY)
 	} else {
+		ui.simple_button_set_disabled(widget.alt_purchase_button, false)
 		ui.label_set_color(widget.alt_purchase_button.variant.(ui.SimpleButton).child, rl.RAYWHITE)
 	}
 

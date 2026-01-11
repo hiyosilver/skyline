@@ -1,0 +1,45 @@
+Feature list
+
+Jobs
+	- one can be run at a time
+	- take a given amount of ticks
+	- generate income at the end
+	- can have fail chance each tick
+	- can have crew slots
+	- crew slots can be optional or required
+	- required crew slots need to be filled for job to start
+	- optional crew slots don't have to be filled but give bonuses
+	- each crew slot has a type, depending on which crew member stat it uses
+	- TODO: make non optional crew slots require a certain level of stats (currently no restriction at all)
+
+Crew
+	- the have a default job they do on their own, generating income
+	- the get a salary at the end of each period
+	- they leave if they aren't paid
+	- the have stats: brawn, savvy, tech and charisma
+	- TODO: make crew members hireable up to a limit
+	- TODO: make crew members trainable, with a chance to increase certain stats
+
+Heists
+	- longer, more compliated jobs
+	- 3 phases: planning, execution, finish
+
+Buildings
+	- have upgrades that can be bought that unlock bonuses and features
+	- can be bought for a substantial amount and then generate income
+	- have additional upgrades that become available after buying the property
+	- TODO: previous upgrades are automatically unlocked when buying it
+
+Stocks
+	- TODO: should probably unlock through building upgrade or similar
+	- interface with a list of available stocks, current price and price trend
+	- ability to buy or sell stock at current price
+	- stocks are not treated as individual lots but one large amount with an averaged cost basis
+
+Bonds (TODO)
+	- should be somewhat similar to bonds
+	- not generally available but get issued by some companies or the government randomly
+	- list of available bonds where player can chose to buy the issue
+	- generates income on quarter or year update (maybe 2 - 4% base rate for gov, +2-10% extra risk premium for business) aka "coupon"
+	- after the full time has elapsed (reached maturity), the principal is returned and the bond removed
+	- when selling early, if current bond interestest is higher, the bond is worth less and can only be sold at a loss (and vice versa)

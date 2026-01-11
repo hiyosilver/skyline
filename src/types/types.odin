@@ -3,7 +3,7 @@ package types
 import "../textures"
 import rl "vendor:raylib"
 
-//Crew
+// Crew
 CrewMemberID :: distinct int
 
 CrewMember :: struct {
@@ -11,11 +11,11 @@ CrewMember :: struct {
 	nickname:                              string,
 	base_salary, base_salary_illegitimate: f64,
 	default_job:                           Job,
-	brawn, savvy, tech, charisma:          int,
+	brawn, savvy, tech, charisma:          i32,
 	assigned_to_job_id:                    JobID,
 }
 
-//Jobs
+// Jobs
 JobID :: distinct int
 
 JobResult :: enum {
@@ -59,13 +59,61 @@ CrewMemberSlotType :: enum {
 	Charisma,
 }
 
+CrewMemberSlotEffectType :: enum {
+	IncomeIncreasePercent,
+	IllegitimateIncomeIncreasePercent,
+	FailureChangeReductionFlat,
+}
+
+CrewMemberSlotEffect :: struct {
+	type:   CrewMemberSlotEffectType,
+	amount: f64,
+}
+
 CrewMemberSlot :: struct {
 	type:                 CrewMemberSlotType,
+	effects:              [dynamic]CrewMemberSlotEffect,
 	optional:             bool,
 	assigned_crew_member: CrewMemberID,
 }
 
-//Stocks
+// Heists
+HeistID :: distinct int
+
+HeistStage :: enum {
+	Idle,
+	Planning,
+	Execution,
+	Finish,
+}
+
+Heist :: struct {
+	// Identity
+	id:                       HeistID,
+	name:                     string,
+	description:              string,
+
+	// Input
+	crew_member_slots:        [dynamic]CrewMemberSlot,
+
+	// State
+	stage:                    HeistStage,
+	planning_ticks_needed:    int,
+	planning_ticks_current:   int,
+	planning_retries_base:    int,
+	planning_retries_current: int,
+	planning_success:         f32,
+	execution_ticks_needed:   int,
+	execution_ticks_current:  int,
+	finish_ticks_needed:      int,
+	finish_ticks_current:     int,
+
+	// Output
+	base_payout:              f64,
+	cached_payout:            f64,
+}
+
+// Stocks
 CompanyID :: distinct int
 
 // Buildings

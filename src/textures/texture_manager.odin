@@ -16,6 +16,8 @@ UiTextureId :: enum {
 	Box,
 	Tick,
 	Panel,
+	TabHeader,
+	ScrollBar,
 	CrewSlot,
 	CrewSlotOptional,
 }
@@ -72,6 +74,10 @@ load_textures :: proc(asset_dir: string) {
 			texture_file_path = fmt.caprintf("%s/images/ui/tick.png", asset_dir)
 		case .Panel:
 			texture_file_path = fmt.caprintf("%s/images/ui/panel.png", asset_dir)
+		case .TabHeader:
+			texture_file_path = fmt.caprintf("%s/images/ui/tab_header.png", asset_dir)
+		case .ScrollBar:
+			texture_file_path = fmt.caprintf("%s/images/ui/scroll_bar.png", asset_dir)
 		case .CrewSlot:
 			texture_file_path = fmt.caprintf("%s/images/ui/crew_slot.png", asset_dir)
 		case .CrewSlotOptional:
@@ -79,7 +85,11 @@ load_textures :: proc(asset_dir: string) {
 		}
 		tex := rl.LoadTexture(texture_file_path)
 		rl.GenTextureMipmaps(&tex)
-		rl.SetTextureFilter(tex, .TRILINEAR)
+
+		if id != .TabHeader {
+			rl.SetTextureFilter(tex, .TRILINEAR)
+		}
+
 		ui_textures[id] = tex
 		delete(texture_file_path)
 	}

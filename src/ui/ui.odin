@@ -24,6 +24,7 @@ ComponentVariant :: union {
 	BoxContainer,
 	MarginContainer,
 	ScrollContainer,
+	TabPanel,
 	Panel,
 	TexturePanel,
 	Pill,
@@ -104,6 +105,12 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 
 		desired_size.x = max(component.min_size.x, child_desired_size.x) + v.scroll_bar_width
 		desired_size.y = min(child_desired_size.y, component.min_size.y)
+	case TabPanel:
+		desired_size = get_desired_size(v.root)
+		desired_size = {
+			max(component.min_size.x, desired_size.x),
+			max(component.min_size.y, desired_size.y),
+		}
 	case Panel:
 		desired_size = get_desired_size(v.child)
 		desired_size = {
@@ -373,6 +380,9 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 			arrange_components(v.child, child_full_rect)
 		}
 
+	case TabPanel:
+		arrange_components(v.root, actual_rect)
+
 	case Panel:
 		if v.child != nil {
 			arrange_components(v.child, actual_rect)
@@ -544,6 +554,30 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 			}
 		}
 
+	case TabPanel:
+		captured = rl.CheckCollisionPointRec(mouse_pos, rect)
+
+		if v.selected_page >= 0 && v.selected_page < len(v.pages) {
+			if handle_input_recursive(v.root, input_data) {
+				captured = true
+
+				if box, ok := v.header_box.variant.(BoxContainer); ok {
+					for child, i in box.children {
+						if simple_button_was_clicked(child) && v.selected_page != i {
+							v.selected_page = i
+
+							if content_box, cok := &v.content_area.variant.(BoxContainer); cok {
+								clear(&content_box.children)
+								if i < len(v.pages) {
+									append(&content_box.children, v.pages[i].content)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
 	case Panel:
 		captured = rl.CheckCollisionPointRec(mouse_pos, rect)
 		if v.child != nil {
@@ -707,8 +741,6 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 	case ScrollContainer:
 		if v.child != nil {
 			if v.scrollable_range > 0.0 {
-				scroll_bar_half_width := v.scroll_bar_width * 0.5
-
 				total_content_height := v.viewport_height + v.scrollable_range
 
 				knob_length_raw: f32 = 0.0
@@ -727,112 +759,82 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 				}
 
 				scroll_knob_start := track_space_available * scroll_progress
-				scroll_knob_end := scroll_knob_start + scroll_knob_length
-
-				scroll_bar_color := v.scroll_bar_dragging ? rl.WHITE : rl.RAYWHITE
 
 				switch v.scroll_bar_position {
 				case .Right:
-					rl.DrawCircleV(
-						{
-							component.position.x + component.size.x - scroll_bar_half_width,
-							component.position.y + scroll_bar_half_width,
-						},
-						scroll_bar_half_width,
-						rl.DARKGRAY,
-					)
-					rl.DrawCircleV(
-						{
-							component.position.x + component.size.x - scroll_bar_half_width,
-							component.position.y + component.size.y - scroll_bar_half_width,
-						},
-						scroll_bar_half_width,
-						rl.DARKGRAY,
-					)
-
 					rl.DrawRectangleV(
 						{
 							component.position.x + component.size.x - v.scroll_bar_width,
-							component.position.y + scroll_bar_half_width,
+							component.position.y,
 						},
-						{v.scroll_bar_width, component.size.y - v.scroll_bar_width},
-						rl.DARKGRAY,
+						{v.scroll_bar_width, component.size.y},
+						v.scroll_bar_background_color,
 					)
 
-					rl.DrawCircleV(
-						{
-							component.position.x + component.size.x - scroll_bar_half_width,
-							component.position.y + scroll_knob_start + scroll_bar_half_width,
-						},
-						scroll_bar_half_width,
-						scroll_bar_color,
-					)
+					source_rectangle := rl.Rectangle {
+						0,
+						0,
+						f32(v.scroll_bar_texture.width),
+						f32(v.scroll_bar_texture.height),
+					}
 
-					rl.DrawCircleV(
-						{
-							component.position.x + component.size.x - scroll_bar_half_width,
-							component.position.y + scroll_knob_end - scroll_bar_half_width,
-						},
-						scroll_bar_half_width,
-						scroll_bar_color,
-					)
+					n_patch_info := rl.NPatchInfo {
+						source_rectangle,
+						v.scroll_bar_texture_patch_offset,
+						v.scroll_bar_texture_patch_offset,
+						v.scroll_bar_texture_patch_offset,
+						v.scroll_bar_texture_patch_offset,
+						.NINE_PATCH,
+					}
 
-					rl.DrawRectangleV(
+					rl.DrawTextureNPatch(
+						v.scroll_bar_texture,
+						n_patch_info,
 						{
 							component.position.x + component.size.x - v.scroll_bar_width,
-							component.position.y + scroll_knob_start + scroll_bar_half_width,
+							component.position.y + scroll_knob_start,
+							v.scroll_bar_width,
+							scroll_knob_length,
 						},
-						{v.scroll_bar_width, scroll_knob_length - v.scroll_bar_width},
-						scroll_bar_color,
+						{0, 0},
+						0.0,
+						v.scroll_bar_tint_color,
 					)
 				case .Left:
-					rl.DrawCircleV(
-						{
-							component.position.x + scroll_bar_half_width,
-							component.position.y + scroll_bar_half_width,
-						},
-						scroll_bar_half_width,
-						rl.DARKGRAY,
-					)
-					rl.DrawCircleV(
-						{
-							component.position.x + scroll_bar_half_width,
-							component.position.y + component.size.y - scroll_bar_half_width,
-						},
-						scroll_bar_half_width,
-						rl.DARKGRAY,
-					)
-
 					rl.DrawRectangleV(
-						{component.position.x, component.position.y + scroll_bar_half_width},
-						{v.scroll_bar_width, component.size.y - v.scroll_bar_width},
-						rl.DARKGRAY,
-					)
-					rl.DrawCircleV(
-						{
-							component.position.x + scroll_bar_half_width,
-							component.position.y + scroll_knob_start + scroll_bar_half_width,
-						},
-						scroll_bar_half_width,
-						scroll_bar_color,
+						{component.position.x, component.position.y},
+						{v.scroll_bar_width, component.size.y},
+						v.scroll_bar_background_color,
 					)
 
-					rl.DrawCircleV(
-						{
-							component.position.x + scroll_bar_half_width,
-							component.position.y + scroll_knob_end - scroll_bar_half_width,
-						},
-						scroll_bar_half_width,
-						scroll_bar_color,
-					)
+					source_rectangle := rl.Rectangle {
+						0,
+						0,
+						f32(v.scroll_bar_texture.width),
+						f32(v.scroll_bar_texture.height),
+					}
 
-					rl.DrawRectangleV(
+					n_patch_info := rl.NPatchInfo {
+						source_rectangle,
+						v.scroll_bar_texture_patch_offset,
+						v.scroll_bar_texture_patch_offset,
+						v.scroll_bar_texture_patch_offset,
+						v.scroll_bar_texture_patch_offset,
+						.NINE_PATCH,
+					}
+
+					rl.DrawTextureNPatch(
+						v.scroll_bar_texture,
+						n_patch_info,
 						{
 							component.position.x,
-							component.position.y + scroll_knob_start + scroll_bar_half_width,
+							component.position.y + scroll_knob_start,
+							v.scroll_bar_width,
+							scroll_knob_length,
 						},
-						{v.scroll_bar_width, scroll_knob_length - v.scroll_bar_width},
-						scroll_bar_color,
+						{0, 0},
+						0.0,
+						v.scroll_bar_tint_color,
 					)
 				}
 			}
@@ -847,6 +849,113 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 
 			rl.EndScissorMode()
 		}
+	case TabPanel:
+		if v.selected_page >= 0 && v.selected_page < len(v.pages) {
+			/*
+			button_count := len(v.pages)
+
+			switch v.tab_bar_position {
+			case .Top:
+				for i in 0 ..< button_count {
+					button_width := component.size.x / f32(button_count)
+					button_position := component.position + rl.Vector2{f32(i) * button_width, 0.0}
+					if i == v.selected_page {
+						rl.DrawRectangleV(
+							button_position,
+							rl.Vector2{button_width, v.tab_bar_width},
+							rl.RED,
+						)
+					} else {
+						rl.DrawRectangleV(
+							button_position,
+							rl.Vector2{button_width, v.tab_bar_width},
+							rl.BLUE,
+						)
+					}
+				}
+			case .Right:
+				for i in 0 ..< button_count {
+					button_height := component.size.y / f32(button_count)
+					button_position :=
+						component.position +
+						rl.Vector2{component.size.x - v.tab_bar_width, f32(i) * button_height}
+					if i == v.selected_page {
+						rl.DrawRectangleV(
+							button_position,
+							rl.Vector2{v.tab_bar_width, component.size.y},
+							rl.RED,
+						)
+					} else {
+						rl.DrawRectangleV(
+							button_position,
+							rl.Vector2{v.tab_bar_width, component.size.y},
+							rl.BLUE,
+						)
+					}
+				}
+			case .Bottom:
+				for i in 0 ..< button_count {
+					button_width := component.size.x / f32(button_count)
+					button_position :=
+						component.position +
+						rl.Vector2{f32(i) * button_width, component.size.y - v.tab_bar_width}
+					if i == v.selected_page {
+						rl.DrawRectangleV(
+							button_position,
+							rl.Vector2{component.size.x, v.tab_bar_width},
+							rl.RED,
+						)
+					} else {
+						rl.DrawRectangleV(
+							button_position,
+							rl.Vector2{button_width, v.tab_bar_width},
+							rl.BLUE,
+						)
+					}
+				}
+			case .Left:
+				for i in 0 ..< button_count {
+					button_height := component.size.y / f32(button_count)
+					button_position := component.position + rl.Vector2{0.0, f32(i) * button_height}
+					if i == v.selected_page {
+						rl.DrawRectangleV(
+							button_position,
+							rl.Vector2{v.tab_bar_width, component.size.y},
+							rl.RED,
+						)
+					} else {
+						rl.DrawRectangleV(
+							button_position,
+							rl.Vector2{v.tab_bar_width, component.size.y},
+							rl.BLUE,
+						)
+					}
+				}
+			}
+			*/
+		}
+
+		draw_components_recursive(v.root, debug)
+
+		if box, ok := v.header_box.variant.(BoxContainer); ok {
+			for child, i in box.children {
+				if header_button, ok_panel := child.variant.(SimpleButton); ok_panel {
+					if i == v.selected_page {
+						n_patch_texture_panel_set_tint_color(
+							header_button.child,
+							rl.Color{32, 24, 48, 255},
+						)
+						draw_components_recursive(child, debug)
+					} else {
+						n_patch_texture_panel_set_tint_color(
+							header_button.child,
+							rl.Color{16, 12, 24, 255},
+						)
+					}
+				}
+			}
+		}
+
 	case Panel:
 		rl.DrawRectangleV(component.position, component.size, v.color)
 		draw_components_recursive(v.child, debug)
@@ -1192,6 +1301,11 @@ destroy_components_recursive :: proc(component: ^Component) {
 		destroy_components_recursive(v.child)
 	case ScrollContainer:
 		destroy_components_recursive(v.child)
+	case TabPanel:
+		for &page in v.pages {
+			destroy_components_recursive(page.content)
+		}
+		delete(v.pages)
 	case Panel:
 		destroy_components_recursive(v.child)
 	case TexturePanel:
