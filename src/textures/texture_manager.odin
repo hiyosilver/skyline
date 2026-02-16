@@ -27,6 +27,7 @@ IconTextureId :: enum {
 	Savvy,
 	Tech,
 	Charisma,
+	Repeats,
 }
 
 exe_path: string
@@ -104,6 +105,8 @@ load_textures :: proc(asset_dir: string) {
 			texture_file_path = fmt.caprintf("%s/images/ui/icons/tech.png", asset_dir)
 		case .Charisma:
 			texture_file_path = fmt.caprintf("%s/images/ui/icons/charisma.png", asset_dir)
+		case .Repeats:
+			texture_file_path = fmt.caprintf("%s/images/ui/icons/repeats.png", asset_dir)
 		}
 		tex := rl.LoadTexture(texture_file_path)
 		rl.GenTextureMipmaps(&tex)

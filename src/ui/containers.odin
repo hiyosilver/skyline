@@ -17,6 +17,22 @@ make_stack :: proc(children: ..^Component) -> ^Component {
 	return c
 }
 
+OffsetContainer :: struct {
+	offset: rl.Vector2,
+	child:  ^Component,
+}
+
+make_offset :: proc(offset: rl.Vector2, child: ^Component = nil) -> ^Component {
+	c := new(Component)
+
+	c.variant = OffsetContainer {
+		offset = offset,
+		child  = child,
+	}
+
+	return c
+}
+
 AnchorType :: enum {
 	TopLeft,
 	Top,

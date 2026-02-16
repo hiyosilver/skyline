@@ -35,6 +35,7 @@ Job :: struct {
 	// State
 	is_ready, is_active:         bool,
 	ticks_needed, ticks_current: int,
+	repeats:                     int,
 
 	// Output
 	base_income:                 f64,

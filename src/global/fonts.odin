@@ -14,7 +14,7 @@ font_tiny: rl.Font
 font_tiny_italic: rl.Font
 
 load_fonts :: proc(asset_dir: string) {
-	symbols := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!?()[]%/$₴@&~,;.:'+-↗→↘◆◇▶▷"
+	symbols := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!?()[]%/$₴@&~,;.:'+-↗→↘◆◇▶▷∞"
 	runes_array := utf8.string_to_runes(symbols)
 	rune_count := utf8.rune_count_in_string(symbols)
 	defer delete(runes_array)

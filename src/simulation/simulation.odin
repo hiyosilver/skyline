@@ -163,6 +163,9 @@ tick :: proc(simulation_state: ^SimulationState) {
 				}
 			} else if job_result == .Failed {
 				jobs.deactivate(&job)
+			}
+
+			if job.repeats == 0 {
 				remove_job(simulation_state, job.id)
 			}
 		}
@@ -349,6 +352,15 @@ remove_crew_member :: proc(
 		if crew_member.id != crew_member_id do continue
 
 		ordered_remove(&simulation_state.crew_roster, i)
+
+		job_loop: for job in simulation_state.job_entries {
+			for &slot in job.crew_member_slots {
+				if slot.assigned_crew_member == crew_member_id {
+					slot.assigned_crew_member = 0
+					break job_loop
+				}
+			}
+		}
 		break
 	}
 }

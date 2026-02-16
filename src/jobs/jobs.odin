@@ -7,6 +7,7 @@ create_job :: proc(
 	name, description: string,
 	level, ticks_needed: int,
 	income, illegitimate_income: f64,
+	repeats: int = -1,
 	buyin_price: f64 = 0.0,
 	illegitimate_buyin_price: f64 = 0.0,
 	failure_chance: f32 = 0.0,
@@ -26,6 +27,7 @@ create_job :: proc(
 		cached_income = income,
 		base_illegitimate_income = illegitimate_income,
 		cached_illegitimate_income = illegitimate_income,
+		repeats = repeats,
 		buyin_price = buyin_price,
 		illegitimate_buyin_price = illegitimate_buyin_price,
 		base_failure_chance = failure_chance,
@@ -56,6 +58,7 @@ tick :: proc(job: ^types.Job) -> types.JobResult {
 	if job.cached_failure_chance > 0.0 {
 		if job.ticks_current < job.ticks_needed - 1 &&
 		   rand.float32() <= job.cached_failure_chance {
+			job.repeats -= 1
 			return .Failed
 		}
 	}
@@ -63,6 +66,7 @@ tick :: proc(job: ^types.Job) -> types.JobResult {
 	job.ticks_current += 1
 	if job.ticks_current >= job.ticks_needed {
 		job.ticks_current -= job.ticks_needed
+		job.repeats -= 1
 		return .Finished
 	}
 

@@ -250,15 +250,14 @@ init_game_ui_layout :: proc() {
 	tab_panel := ui.make_tab_panel(
 		{0.0, global.WINDOW_HEIGHT * 0.5},
 		textures.ui_textures[.Panel],
-		32.0,
+		40.0,
 		.Top,
 		0,
-		ui.TabPage{title = "Jobs", content = ui.make_margin(16, 16, 16, 16, job_scroll_container)},
-		ui.TabPage{title = "TEST", content = ui.make_margin(16, 16, 16, 16, TEST_BOX)},
+		ui.TabPage{title = "Jobs", content = ui.make_margin(8, 8, 8, 8, job_scroll_container)},
+		ui.TabPage{title = "TEST", content = ui.make_margin(8, 8, 8, 8, TEST_BOX)},
 	)
 
 	job_panel := ui.make_anchor(.BottomLeft, ui.make_margin(16, 16, 16, 16, tab_panel))
-
 
 	game_state.ui.crew_members_box = ui.make_box(.Vertical, .SpaceBetween, .Fill, 8)
 
@@ -419,6 +418,7 @@ setup_debug_scenario :: proc(
 		20,
 		0.0,
 		250.0,
+		5,
 		0.0,
 		100.0,
 		0.05,
@@ -436,6 +436,7 @@ setup_debug_scenario :: proc(
 		40,
 		0.0,
 		600.0,
+		3,
 		0.0,
 		50.0,
 		0.05,
@@ -451,6 +452,7 @@ setup_debug_scenario :: proc(
 		60,
 		0.0,
 		500.0,
+		5,
 		0.0,
 		0.0,
 		0.025,
@@ -469,6 +471,7 @@ setup_debug_scenario :: proc(
 		120,
 		8000.0,
 		0.0,
+		1,
 		1500.0,
 		0.0,
 		0.02,

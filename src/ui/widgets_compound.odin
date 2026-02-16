@@ -19,7 +19,6 @@ TabPage :: struct {
 TabPanel :: struct {
 	pages:            [dynamic]TabPage,
 	selected_page:    int,
-	tab_bar_width:    f32,
 	tab_bar_position: TabBarPosition,
 	root:             ^Component,
 	header_box:       ^Component,
@@ -29,7 +28,7 @@ TabPanel :: struct {
 make_tab_panel :: proc(
 	min_size: rl.Vector2,
 	texture: rl.Texture2D,
-	tab_bar_width: f32 = 32.0,
+	tab_bar_width: f32 = 40.0,
 	tab_bar_position: TabBarPosition = .Top,
 	selected_page: int = -1,
 	pages: ..TabPage,
@@ -39,7 +38,7 @@ make_tab_panel :: proc(
 
 	header_direction := BoxDirection.Horizontal
 	main_direction := BoxDirection.Vertical
-	button_size := rl.Vector2{120, 30}
+	button_size := rl.Vector2{120, tab_bar_width}
 
 	if tab_bar_position == .Left || tab_bar_position == .Right {
 		header_direction = BoxDirection.Vertical
@@ -84,8 +83,6 @@ make_tab_panel :: proc(
 		box_add_child(header, btn)
 	}
 
-	clamped_tab_bar_width := clamp(tab_bar_width, 12.0, tab_bar_width)
-
 	root := make_box(main_direction, .Start, .Fill, -6)
 
 	if tab_bar_position == .Top || tab_bar_position == .Left {
@@ -102,7 +99,6 @@ make_tab_panel :: proc(
 		header_box       = header,
 		content_area     = content,
 		pages            = make([dynamic]TabPage),
-		tab_bar_width    = clamped_tab_bar_width,
 		tab_bar_position = tab_bar_position,
 	}
 

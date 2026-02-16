@@ -20,6 +20,7 @@ ComponentState :: enum {
 
 ComponentVariant :: union {
 	StackContainer,
+	OffsetContainer,
 	AnchorContainer,
 	BoxContainer,
 	MarginContainer,
@@ -63,6 +64,8 @@ get_desired_size :: proc(component: ^Component) -> rl.Vector2 {
 			desired_size.x = max(desired_size.x, child_size.x)
 			desired_size.y = max(desired_size.y, child_size.y)
 		}
+	case OffsetContainer:
+		desired_size = get_desired_size(v.child)
 	case AnchorContainer:
 		desired_size = get_desired_size(v.child)
 	case BoxContainer:
@@ -185,6 +188,14 @@ arrange_components :: proc(component: ^Component, actual_rect: rl.Rectangle) {
 		for child in v.children {
 			arrange_components(child, actual_rect)
 		}
+	case OffsetContainer:
+		child_rect := rl.Rectangle {
+			actual_rect.x + v.offset.x,
+			actual_rect.y + v.offset.y,
+			actual_rect.width,
+			actual_rect.height,
+		}
+		arrange_components(v.child, child_rect)
 	case AnchorContainer:
 		if v.child != nil {
 			child_w := v.child.desired_size.x
@@ -471,6 +482,11 @@ handle_input_recursive :: proc(component: ^Component, input_data: ^input.RawInpu
 		#reverse for child in v.children {
 			if handle_input_recursive(child, input_data) do captured = true
 		}
+	case OffsetContainer:
+		if v.child != nil {
+			if handle_input_recursive(v.child, input_data) do captured = true
+		}
+
 	case AnchorContainer:
 		if v.child != nil {
 			if handle_input_recursive(v.child, input_data) do captured = true
@@ -730,6 +746,8 @@ draw_components_recursive :: proc(component: ^Component, debug: bool = false) {
 		for child in v.children {
 			draw_components_recursive(child, debug)
 		}
+	case OffsetContainer:
+		draw_components_recursive(v.child, debug)
 	case AnchorContainer:
 		draw_components_recursive(v.child, debug)
 	case BoxContainer:
@@ -1290,6 +1308,8 @@ destroy_components_recursive :: proc(component: ^Component) {
 			destroy_components_recursive(child)
 		}
 		delete(v.children)
+	case OffsetContainer:
+		destroy_components_recursive(v.child)
 	case AnchorContainer:
 		destroy_components_recursive(v.child)
 	case BoxContainer:

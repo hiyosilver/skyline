@@ -12,6 +12,7 @@ JobCard :: struct {
 	root:              ^ui.Component,
 	level_label:       ^ui.Component,
 	name_label:        ^ui.Component,
+	repeats_label:     ^ui.Component,
 	description_label: ^ui.Component,
 	income_label:      ^ui.Component,
 	ticks_label:       ^ui.Component,
@@ -66,6 +67,7 @@ make_job_card :: proc(job: ^types.Job) -> JobCard {
 
 	widget.level_label = ui.make_label("", global.font_small, 18.0, rl.RAYWHITE, .Left)
 	widget.name_label = ui.make_label("", global.font, 24.0, rl.RAYWHITE, .Left)
+	widget.repeats_label = ui.make_label("", global.font, 24.0, rl.RAYWHITE, .Left)
 	widget.description_label = ui.make_label("", global.font_small, 18.0, rl.RAYWHITE, .Left)
 	widget.income_label = ui.make_label("", global.font_small_italic, 18.0, rl.RAYWHITE, .Left)
 	widget.ticks_label = ui.make_label("", global.font_small_italic, 18.0, rl.RAYWHITE, .Left)
@@ -133,6 +135,13 @@ make_job_card :: proc(job: ^types.Job) -> JobCard {
 		ui.box_add_child(crew_members_box, slot_button)
 	}
 
+	repeats_texture := ui.make_texture_panel(
+		textures.icon_textures[.Repeats],
+		{32.0, 32.0},
+		rl.RAYWHITE,
+		ui.make_anchor(.Center, ui.make_offset({0, -2}, widget.repeats_label)),
+	)
+
 	widget.root = ui.make_n_patch_texture_panel(
 		textures.ui_textures[.Panel],
 		{320.0, 120.0},
@@ -161,7 +170,14 @@ make_job_card :: proc(job: ^types.Job) -> JobCard {
 						.SpaceBetween,
 						.Fill,
 						4,
-						widget.level_label,
+						ui.make_box(
+							.Horizontal,
+							.Start,
+							.Fill,
+							4,
+							repeats_texture,
+							widget.level_label,
+						),
 						widget.name_label,
 						widget.description_label,
 						widget.income_label,
@@ -217,6 +233,9 @@ update_job_card :: proc(
 	} else {
 		ui.label_set_text(widget.name_label, job.name)
 	}
+
+	repeats := job.repeats < 0 ? "∞" : fmt.tprintf("%d", job.repeats)
+	ui.label_set_text(widget.repeats_label, repeats)
 
 	if job.cached_income > 0.0 {
 		if job.cached_illegitimate_income > 0.0 {
